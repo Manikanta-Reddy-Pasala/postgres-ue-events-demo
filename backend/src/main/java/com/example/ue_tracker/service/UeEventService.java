@@ -52,7 +52,7 @@ public class UeEventService {
 
     public UeEventPageResponse getHistory(String imsiOrSupi, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<UeEventHistoryEntity> entityPage = historyRepository.findByImsiOrSupiOrderByUpdatedAtDesc(imsiOrSupi, pageable);
+        Page<UeEventHistoryEntity> entityPage = historyRepository.findHistoryByImsiOrSupi(imsiOrSupi, pageable);
 
         List<UeEvent> protoEvents = entityPage.getContent().stream()
                 .map(adapter::toProto)

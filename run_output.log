@@ -1,0 +1,82 @@
+Starting PostgreSQL...
+Starting postgresql (via systemctl): postgresql.service.
+ALTER ROLE
+Starting Spring Boot Backend...
+Starting React Frontend...
+Both applications are running. Press Ctrl+C to stop.
+
+> frontend@0.1.0 start
+> react-scripts start
+
+> Task :extractIncludeProto UP-TO-DATE
+> Task :extractProto UP-TO-DATE
+> Task :generateProto UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :resolveMainClassName UP-TO-DATE
+
+> Task :bootRun
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.3)
+
+2026-06-11T11:40:59.351Z  INFO 254498 --- [           main] c.e.ue_tracker.UeTrackerApplication      : Starting UeTrackerApplication using Java 21.0.10 with PID 254498 (/app/backend/build/classes/java/main started by jules in /app/backend)
+2026-06-11T11:40:59.356Z  INFO 254498 --- [           main] c.e.ue_tracker.UeTrackerApplication      : No active profile set, falling back to 1 default profile: "default"
+(node:253735) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:253735) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+2026-06-11T11:41:00.921Z  INFO 254498 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-11T11:41:01.019Z  INFO 254498 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 86 ms. Found 2 JPA repository interfaces.
+Starting the development server...
+
+2026-06-11T11:41:02.871Z  INFO 254498 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-06-11T11:41:02.933Z  INFO 254498 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-11T11:41:02.936Z  INFO 254498 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.19]
+2026-06-11T11:41:03.078Z  INFO 254498 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-06-11T11:41:03.082Z  INFO 254498 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 3609 ms
+2026-06-11T11:41:03.618Z  INFO 254498 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-06-11T11:41:03.739Z  INFO 254498 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.4.4.Final
+2026-06-11T11:41:03.815Z  INFO 254498 --- [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-06-11T11:41:04.235Z  INFO 254498 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-11T11:41:04.282Z  INFO 254498 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-11T11:41:05.347Z  INFO 254498 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@25218a4d
+2026-06-11T11:41:05.351Z  INFO 254498 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+Compiled successfully!
+
+You can now view frontend in the browser.
+
+  Local:            http://localhost:3000
+  On Your Network:  http://192.168.0.2:3000
+
+Note that the development build is not optimized.
+To create a production build, use npm run build.
+
+webpack compiled successfully
+Files successfully emitted, waiting for typecheck results...
+Issues checking in progress...
+2026-06-11T11:41:07.728Z  INFO 254498 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-06-11T11:41:07.824Z  INFO 254498 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-11T11:41:08.440Z  INFO 254498 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-06-11T11:41:09.411Z  WARN 254498 --- [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+No issues found.
+2026-06-11T11:41:10.197Z  INFO 254498 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path ''
+2026-06-11T11:41:10.211Z  INFO 254498 --- [           main] c.e.ue_tracker.UeTrackerApplication      : Started UeTrackerApplication in 11.489 seconds (process running for 12.297)
+2026-06-11T11:41:10.215Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Starting initial bulk data generation...
+2026-06-11T11:41:10.382Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 0 initial records
+2026-06-11T11:41:11.086Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 100 initial records
+2026-06-11T11:41:11.660Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 200 initial records
+2026-06-11T11:41:12.172Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 300 initial records
+2026-06-11T11:41:12.616Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 400 initial records
+2026-06-11T11:41:12.992Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 500 initial records
+2026-06-11T11:41:13.360Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 600 initial records
+2026-06-11T11:41:13.748Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 700 initial records
+2026-06-11T11:41:14.118Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 800 initial records
+2026-06-11T11:41:14.476Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Generated 900 initial records
+2026-06-11T11:41:14.815Z  INFO 254498 --- [           main] c.e.u.service.DataGeneratorService       : Initial bulk data generation complete.
+Stopping applications...
