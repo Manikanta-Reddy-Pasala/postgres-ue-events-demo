@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package com.example.ue;
+
+option java_multiple_files = true;
+option java_package = "com.example.ue.proto";
+option java_outer_classname = "UeEventProto";
+
+enum ActionTaken {
+  UNKNOWN_ACTION = 0;
+  REJECT = 1;
+  ATTACH = 2;
+  SILENT_CALL = 3;
+  DETACH = 4;
+  LOCATION_UPDATE = 5;
+  PAGING = 6;
+}
+
+enum RatType {
+  UNKNOWN_RAT = 0;
+  RAT_2G = 1;
+  RAT_3G = 2;
+  RAT_4G_LTE = 3;
+  RAT_5G = 4;
+}
+
+message UeEvent {
+  string imsi_or_supi = 1;
+  string imei = 2;
+  string msisdn = 3; // mapped from 'mission'
+  string guti = 4;
+  string tmsi = 5;
+  int32 rssi = 6;
+  ActionTaken action_taken = 7;
+  int32 reject_cause = 8;
+  RatType rat = 9;
+  int32 frequency_band = 10;
+  int32 arfcn = 11;
+  int32 tracking_area_code = 12;
+  string downlink_band_width = 13;
+  int32 plmn_mcc = 14;
+  int32 plmn_mnc = 15;
+  string provider_name = 16;
+  string mission_id = 17;
+  string sensor_id = 18;
+  string subsystem_id = 19;
+  string trx_command_id = 20;
+  string created_at = 21; // ISO 8601 string or timestamp
+  string updated_at = 22;
+  string country_iso_alpha2 = 23;
+  string country_name = 24;
+  bool target = 25;
+  int32 capture_count = 26;
+  int32 timing_advance = 27;
+  int32 distance_in_meters = 28;
+}
+
+message UeEventPageResponse {
+  repeated UeEvent events = 1;
+  int32 total_pages = 2;
+  int64 total_elements = 3;
+  int32 current_page = 4;
+}
+
+message EmptyRequest {}
