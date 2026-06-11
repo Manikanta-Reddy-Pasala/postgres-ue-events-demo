@@ -1,39 +1,59 @@
 #!/bin/bash
 
-# Ensure PostgreSQL is running
-echo "Starting PostgreSQL..."
-sudo /etc/init.d/postgresql start
+# Create docker-compose.yml
+cat << 'EOF' > docker-compose.yml
+version: '3.8'
 
-# Setup database if it doesn't exist
-sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'uetracker'" | grep -q 1 || sudo -u postgres psql -c "CREATE DATABASE uetracker;"
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: uetracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-# Function to handle shutdown gracefully
-cleanup() {
-    echo "Stopping applications..."
-    kill $BACKEND_PID
-    kill $FRONTEND_PID
-    exit 0
-}
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/uetracker
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
 
-# Trap SIGINT (Ctrl+C) to run cleanup
-trap cleanup SIGINT
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
-# Start Backend
-echo "Starting Spring Boot Backend..."
-cd backend
-./gradlew bootRun &
-BACKEND_PID=$!
-cd ..
+volumes:
+  postgres_data:
+EOF
 
-# Start Frontend
-echo "Starting React Frontend..."
-cd frontend
-npm start &
-FRONTEND_PID=$!
-cd ..
+echo "Generated docker-compose.yml"
+echo "Starting application with Docker Compose..."
+docker-compose up --build -d
 
-echo "Both applications are running. Press Ctrl+C to stop."
-
-# Wait indefinitely until interrupted
-wait
+echo "Application is starting!"
+echo "Backend API will be available at http://localhost:8080"
+echo "Frontend UI will be available at http://localhost:3000"
+echo "To view logs, run: docker-compose logs -f"
+echo "To stop, run: docker-compose down"
