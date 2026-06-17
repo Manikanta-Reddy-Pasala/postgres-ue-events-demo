@@ -36,6 +36,8 @@ public class BenchmarkService {
 
     private static final int WRITE_BATCH = 2000;
     private static final int WRITER_THREADS = 3;
+    // a base IMSI the load reuses heavily -> its history grows on both sides; we time reads of it
+    private static final String HOT_IMSI = "424021478673415";
 
     private final EventFactory factory;
     private final CqrsProjectorService projector;
@@ -66,8 +68,8 @@ public class BenchmarkService {
         }
         try {
             // warm both paths so first-sample JIT/plan cost isn't attributed unfairly
-            stores.get(EventModel.NORMAL).getLatest(null, 0, 50);
-            stores.get(EventModel.CQRS).getLatest(null, 0, 50);
+            stores.get(EventModel.NORMAL).getHistory(HOT_IMSI, 0, 50);
+            stores.get(EventModel.CQRS).getHistory(HOT_IMSI, 0, 50);
             Sampled normal = measureFor(EventModel.NORMAL, normalLoadEvents::get, durationMs);
             Sampled cqrs = measureFor(EventModel.CQRS, projector::projectedRows, durationMs);
             return new Result(durationMs, normal.read(), cqrs.read(), normal.write(), cqrs.write());
@@ -101,7 +103,7 @@ public class BenchmarkService {
         long end = start + durationMs * 1_000_000L;
         while (System.nanoTime() < end) {
             long t = System.nanoTime();
-            store.getLatest(null, 0, 50);
+            store.getHistory(HOT_IMSI, 0, 50);   // reads the history table the write counter tracks
             samples.add((System.nanoTime() - t) / 1_000_000L);
         }
         long wallMs = (System.nanoTime() - start) / 1_000_000L;
