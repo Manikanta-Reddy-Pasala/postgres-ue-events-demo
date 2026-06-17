@@ -1,6 +1,7 @@
 package com.example.ue_tracker.controller;
 
 import com.example.ue.proto.UeEventPageResponse;
+import com.example.ue_tracker.benchmark.BenchmarkService;
 import com.example.ue_tracker.cqrs.CqrsProjectorService;
 import com.example.ue_tracker.generator.GenerationService;
 import com.example.ue_tracker.model.EventModel;
@@ -19,12 +20,20 @@ public class UeEventController {
     private final Map<EventModel, EventStore> stores = new EnumMap<>(EventModel.class);
     private final GenerationService generation;
     private final CqrsProjectorService projector;
+    private final BenchmarkService benchmark;
 
     public UeEventController(List<EventStore> storeList, GenerationService generation,
-                             CqrsProjectorService projector) {
+                             CqrsProjectorService projector, BenchmarkService benchmark) {
         storeList.forEach(s -> stores.put(s.model(), s));
         this.generation = generation;
         this.projector = projector;
+        this.benchmark = benchmark;
+    }
+
+    @PostMapping("/benchmark")
+    public Map<String, Object> benchmark(@RequestParam(defaultValue = "4000") int durationMs) {
+        BenchmarkService.Result r = benchmark.run(Math.max(500, Math.min(durationMs, 15000)));
+        return Map.of("durationMs", r.durationMs(), "normal", r.normal(), "cqrs", r.cqrs());
     }
 
     @PostMapping("/generate")

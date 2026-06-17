@@ -6,7 +6,8 @@ import {
     TextField, Chip, Stack
 } from '@mui/material';
 import {
-    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, fetchStats, Model
+    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, fetchStats,
+    runBenchmark, LatencyStats, Model
 } from './api';
 import { com } from './proto';
 
@@ -33,6 +34,8 @@ const Dashboard: React.FC = () => {
     const [genMsg, setGenMsg] = useState<string>('');
     const [backlog, setBacklog] = useState<number>(0);
     const [stats, setStats] = useState<{ uniqueImsis: number; totalEvents: number }>({ uniqueImsis: 0, totalEvents: 0 });
+    const [bench, setBench] = useState<{ durationMs: number; normal: LatencyStats; cqrs: LatencyStats } | null>(null);
+    const [benchRunning, setBenchRunning] = useState(false);
 
     // history dialog
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -87,6 +90,13 @@ const Dashboard: React.FC = () => {
             setPage(1);
             await loadLatest(1, activeFilter);
         } catch (e) { setGenMsg('Clear failed (see console)'); console.error(e); }
+    };
+
+    const onBenchmark = async () => {
+        setBenchRunning(true); setBench(null);
+        try {
+            setBench(await runBenchmark(4000));
+        } catch (e) { console.error(e); } finally { setBenchRunning(false); }
     };
 
     const runSearch = () => { setPage(1); setActiveFilter(search); };
@@ -152,6 +162,49 @@ const Dashboard: React.FC = () => {
                 <Button variant="outlined" color="error" onClick={onClear}>Clear Data</Button>
                 <Typography variant="body2">{genMsg}</Typography>
             </Stack>
+
+            <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: bench ? 1.5 : 0 }}>
+                    <Button variant="contained" color="secondary" onClick={onBenchmark} disabled={benchRunning}>
+                        {benchRunning ? 'Running…' : 'Compare under load'}
+                    </Button>
+                    {benchRunning && <CircularProgress size={20} />}
+                    <Typography variant="body2" color="text.secondary">
+                        Hammers writes (3 threads) for ~4s while continuously sampling read latency on each model.
+                        NORMAL reads contend with the write storm on shared tables; CQRS reads hit isolated read tables.
+                        Best run on a large dataset (Generate first).
+                    </Typography>
+                </Stack>
+                {bench && (
+                    <Table size="small" sx={{ maxWidth: 640 }}>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Model</TableCell><TableCell align="right">avg</TableCell>
+                                <TableCell align="right">p50</TableCell><TableCell align="right">p95</TableCell>
+                                <TableCell align="right">max</TableCell><TableCell align="right">samples</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            <TableRow>
+                                <TableCell><b>NORMAL</b> (shared tables)</TableCell>
+                                <TableCell align="right">{bench.normal.avgMs} ms</TableCell>
+                                <TableCell align="right">{bench.normal.p50Ms} ms</TableCell>
+                                <TableCell align="right">{bench.normal.p95Ms} ms</TableCell>
+                                <TableCell align="right">{bench.normal.maxMs} ms</TableCell>
+                                <TableCell align="right">{bench.normal.samples}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell><b>CQRS</b> (isolated reads)</TableCell>
+                                <TableCell align="right">{bench.cqrs.avgMs} ms</TableCell>
+                                <TableCell align="right">{bench.cqrs.p50Ms} ms</TableCell>
+                                <TableCell align="right">{bench.cqrs.p95Ms} ms</TableCell>
+                                <TableCell align="right">{bench.cqrs.maxMs} ms</TableCell>
+                                <TableCell align="right">{bench.cqrs.samples}</TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                )}
+            </Paper>
 
             {loading ? <CircularProgress /> : (
                 <TableContainer component={Paper}>

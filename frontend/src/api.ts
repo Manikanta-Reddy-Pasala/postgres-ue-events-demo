@@ -15,6 +15,13 @@ export const clearData = async () => {
     return response.data as { cleared: boolean };
 };
 
+export type LatencyStats = { avgMs: number; p50Ms: number; p95Ms: number; maxMs: number; samples: number };
+
+export const runBenchmark = async (durationMs = 4000) => {
+    const response = await axios.post(`${API_BASE_URL}/benchmark`, null, { params: { durationMs }, timeout: 120000 });
+    return response.data as { durationMs: number; normal: LatencyStats; cqrs: LatencyStats };
+};
+
 export const fetchStats = async (model: Model) => {
     const response = await axios.get(`${API_BASE_URL}/stats`, { params: { model } });
     return response.data as { uniqueImsis: number; totalEvents: number };
