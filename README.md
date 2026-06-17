@@ -76,6 +76,23 @@ Conversion to/from the DB is split by direction — note the save path does **no
 - `UeEventAdapter.fromRow` — `ResultSet` → proto, used by `SeekQuery` (read side only).
 - `CursorCodec` — keyset cursor ⇄ opaque base64 token (pagination, not row data).
 
+Full round trip (note: DB stores plain relational columns — no JSON):
+
+```
+  UI (React)             Backend (Spring Boot)                 Postgres
+  ──────────             ─────────────────────                 ────────
+                 proto                       proto → CSV
+  Generate  ───────────►  controller  ───────────────────►  COPY ─► columns
+            (HTTP body)   GenerationService  (CopySupport)
+
+                 proto                       ResultSet → proto
+  Browse    ◄───────────  controller  ◄───────────────────  SELECT ◄ columns
+            (HTTP body)   SeekQuery         (UeEventAdapter)
+
+  UI always sends/receives protobuf.  DB I/O is CSV-out / rows-in over
+  relational columns.  JSON only on generate/clear/status responses.
+```
+
 ## Architecture — NORMAL model (2 tables)
 
 ```
