@@ -31,7 +31,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/uetracker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/uetracker?reWriteBatchedInserts=true
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
 

@@ -1,32 +1,37 @@
 import axios from 'axios';
 import { com } from './proto';
 
-const API_BASE_URL = 'http://localhost:8080/api/events';
+const API_BASE_URL = 'http://localhost:8080/api';
 
-export const fetchLatestEvents = async (page = 0, size = 50) => {
-    try {
-        const response = await axios.get(`${API_BASE_URL}/latest`, {
-            params: { page, size },
-            responseType: 'arraybuffer',
-        });
-        const decoded = com.example.ue.UeEventPageResponse.decode(new Uint8Array(response.data));
-        return decoded;
-    } catch (error) {
-        console.error("Error fetching latest events:", error);
-        throw error;
-    }
+export type Model = 'NORMAL' | 'CQRS';
+export type Strategy = 'OFFSET' | 'KEYSET';
+
+export const generateData = async (count: number) => {
+    const response = await axios.post(`${API_BASE_URL}/generate`, null, { params: { count } });
+    return response.data as { count: number; normalMs: number; cqrsWriteMs: number };
 };
 
-export const fetchEventHistory = async (imsi: string, page = 0, size = 50) => {
-    try {
-        const response = await axios.get(`${API_BASE_URL}/${imsi}/history`, {
-            params: { page, size },
-            responseType: 'arraybuffer',
-        });
-        const decoded = com.example.ue.UeEventPageResponse.decode(new Uint8Array(response.data));
-        return decoded;
-    } catch (error) {
-        console.error("Error fetching event history:", error);
-        throw error;
-    }
+export const fetchProjectionStatus = async () => {
+    const response = await axios.get(`${API_BASE_URL}/projection/status`);
+    return response.data as { outboxBacklog: number };
+};
+
+export const fetchLatest = async (
+    model: Model, strategy: Strategy, page: number, cursor: string | null, size = 50
+) => {
+    const response = await axios.get(`${API_BASE_URL}/events/latest`, {
+        params: { model, strategy, page, cursor: cursor ?? undefined, size },
+        responseType: 'arraybuffer',
+    });
+    return com.example.ue.UeEventPageResponse.decode(new Uint8Array(response.data));
+};
+
+export const fetchHistory = async (
+    imsi: string, model: Model, strategy: Strategy, page: number, cursor: string | null, size = 50
+) => {
+    const response = await axios.get(`${API_BASE_URL}/events/${imsi}/history`, {
+        params: { model, strategy, page, cursor: cursor ?? undefined, size },
+        responseType: 'arraybuffer',
+    });
+    return com.example.ue.UeEventPageResponse.decode(new Uint8Array(response.data));
 };

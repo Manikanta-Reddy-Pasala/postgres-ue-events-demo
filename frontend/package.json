@@ -35,6 +35,10 @@
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "ignorePatterns": [
+      "src/proto.js",
+      "src/proto.d.ts"
     ]
   },
   "browserslist": {

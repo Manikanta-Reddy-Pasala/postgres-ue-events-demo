@@ -364,6 +364,15 @@ export namespace com {
                 /** UeEventPageResponse currentPage. */
                 currentPage: number;
 
+                /** UeEventPageResponse queryTimeMs. */
+                queryTimeMs: (number|Long);
+
+                /** UeEventPageResponse nextCursor. */
+                nextCursor: string;
+
+                /** UeEventPageResponse hasNext. */
+                hasNext: boolean;
+
                 /**
                  * Creates a new UeEventPageResponse instance using the specified properties.
                  * @param [properties] Properties to set
@@ -459,6 +468,15 @@ export namespace com {
 
                     /** UeEventPageResponse currentPage */
                     currentPage?: (number|null);
+
+                    /** UeEventPageResponse queryTimeMs */
+                    queryTimeMs?: (number|Long|null);
+
+                    /** UeEventPageResponse nextCursor */
+                    nextCursor?: (string|null);
+
+                    /** UeEventPageResponse hasNext */
+                    hasNext?: (boolean|null);
 
                     /** Unknown fields preserved while decoding when enabled */
                     $unknowns?: Uint8Array[];

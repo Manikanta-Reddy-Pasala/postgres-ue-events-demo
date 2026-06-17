@@ -1,4 +1,3 @@
-/* eslint-disable */
 /*eslint-disable block-scoped-var, id-length, no-control-regex, no-magic-numbers, no-mixed-operators, no-prototype-builtins, no-redeclare, no-shadow, no-var, sort-vars, default-case, jsdoc/require-param*/
 "use strict";
 
@@ -1213,6 +1212,9 @@ $root.com = (function() {
                  * @property {number|null} [totalPages] UeEventPageResponse totalPages
                  * @property {number|Long|null} [totalElements] UeEventPageResponse totalElements
                  * @property {number|null} [currentPage] UeEventPageResponse currentPage
+                 * @property {number|Long|null} [queryTimeMs] UeEventPageResponse queryTimeMs
+                 * @property {string|null} [nextCursor] UeEventPageResponse nextCursor
+                 * @property {boolean|null} [hasNext] UeEventPageResponse hasNext
                  * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
 
@@ -1278,6 +1280,30 @@ $root.com = (function() {
                 UeEventPageResponse.prototype.currentPage = 0;
 
                 /**
+                 * UeEventPageResponse queryTimeMs.
+                 * @member {number|Long} queryTimeMs
+                 * @memberof com.example.ue.UeEventPageResponse
+                 * @instance
+                 */
+                UeEventPageResponse.prototype.queryTimeMs = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+                /**
+                 * UeEventPageResponse nextCursor.
+                 * @member {string} nextCursor
+                 * @memberof com.example.ue.UeEventPageResponse
+                 * @instance
+                 */
+                UeEventPageResponse.prototype.nextCursor = "";
+
+                /**
+                 * UeEventPageResponse hasNext.
+                 * @member {boolean} hasNext
+                 * @memberof com.example.ue.UeEventPageResponse
+                 * @instance
+                 */
+                UeEventPageResponse.prototype.hasNext = false;
+
+                /**
                  * Creates a new UeEventPageResponse instance using the specified properties.
                  * @function create
                  * @memberof com.example.ue.UeEventPageResponse
@@ -1318,6 +1344,12 @@ $root.com = (function() {
                         writer.uint32(/* id 3, wireType 0 =*/24).int64(message.totalElements);
                     if (message.currentPage != null && $Object.hasOwnProperty.call(message, "currentPage"))
                         writer.uint32(/* id 4, wireType 0 =*/32).int32(message.currentPage);
+                    if (message.queryTimeMs != null && $Object.hasOwnProperty.call(message, "queryTimeMs"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).int64(message.queryTimeMs);
+                    if (message.nextCursor != null && $Object.hasOwnProperty.call(message, "nextCursor"))
+                        writer.uint32(/* id 6, wireType 2 =*/50).string(message.nextCursor);
+                    if (message.hasNext != null && $Object.hasOwnProperty.call(message, "hasNext"))
+                        writer.uint32(/* id 7, wireType 0 =*/56).bool(message.hasNext);
                     if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                         for (var i = 0; i < message.$unknowns.length; ++i)
                             writer.raw(message.$unknowns[i]);
@@ -1400,6 +1432,33 @@ $root.com = (function() {
                                     delete message.currentPage;
                                 continue;
                             }
+                        case 5: {
+                                if (wireType !== 0)
+                                    break;
+                                if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                    message.queryTimeMs = value;
+                                else
+                                    delete message.queryTimeMs;
+                                continue;
+                            }
+                        case 6: {
+                                if (wireType !== 2)
+                                    break;
+                                if ((value = reader.stringVerify()).length)
+                                    message.nextCursor = value;
+                                else
+                                    delete message.nextCursor;
+                                continue;
+                            }
+                        case 7: {
+                                if (wireType !== 0)
+                                    break;
+                                if (value = reader.bool())
+                                    message.hasNext = value;
+                                else
+                                    delete message.hasNext;
+                                continue;
+                            }
                         }
                         reader.skipType(wireType, _depth, tag);
                         if (!reader.discardUnknown) {
@@ -1461,6 +1520,15 @@ $root.com = (function() {
                     if (message.currentPage != null && $Object.hasOwnProperty.call(message, "currentPage"))
                         if (!$util.isInteger(message.currentPage))
                             return "currentPage: integer expected";
+                    if (message.queryTimeMs != null && $Object.hasOwnProperty.call(message, "queryTimeMs"))
+                        if (!$util.isInteger(message.queryTimeMs) && !(message.queryTimeMs && $util.isInteger(message.queryTimeMs.low) && $util.isInteger(message.queryTimeMs.high)))
+                            return "queryTimeMs: integer|Long expected";
+                    if (message.nextCursor != null && $Object.hasOwnProperty.call(message, "nextCursor"))
+                        if (!$util.isString(message.nextCursor))
+                            return "nextCursor: string expected";
+                    if (message.hasNext != null && $Object.hasOwnProperty.call(message, "hasNext"))
+                        if (typeof message.hasNext !== "boolean")
+                            return "hasNext: boolean expected";
                     return null;
                 };
 
@@ -1508,6 +1576,22 @@ $root.com = (function() {
                     if (object.currentPage != null)
                         if ($Number(object.currentPage) !== 0)
                             message.currentPage = object.currentPage | 0;
+                    if (object.queryTimeMs != null)
+                        if (typeof object.queryTimeMs === "object" ? object.queryTimeMs.low || object.queryTimeMs.high : $Number(object.queryTimeMs) !== 0)
+                            if ($util.Long)
+                                message.queryTimeMs = $util.Long.fromValue(object.queryTimeMs, false);
+                            else if (typeof object.queryTimeMs === "string")
+                                message.queryTimeMs = $parseInt(object.queryTimeMs, 10);
+                            else if (typeof object.queryTimeMs === "number")
+                                message.queryTimeMs = object.queryTimeMs;
+                            else if (typeof object.queryTimeMs === "object")
+                                message.queryTimeMs = new $util.LongBits(object.queryTimeMs.low >>> 0, object.queryTimeMs.high >>> 0).toNumber();
+                    if (object.nextCursor != null)
+                        if (typeof object.nextCursor !== "string" || object.nextCursor.length)
+                            message.nextCursor = $String(object.nextCursor);
+                    if (object.hasNext != null)
+                        if (object.hasNext)
+                            message.hasNext = $Boolean(object.hasNext);
                     return message;
                 };
 
@@ -1538,6 +1622,13 @@ $root.com = (function() {
                         } else
                             object.totalElements = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                         object.currentPage = 0;
+                        if ($util.Long) {
+                            var long = new $util.Long(0, 0, false);
+                            object.queryTimeMs = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                        } else
+                            object.queryTimeMs = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                        object.nextCursor = "";
+                        object.hasNext = false;
                     }
                     if (message.events && message.events.length) {
                         object.events = $Array(message.events.length);
@@ -1555,6 +1646,17 @@ $root.com = (function() {
                             object.totalElements = options.longs === $String ? $util.Long.prototype.toString.call(message.totalElements) : options.longs === $Number ? new $util.LongBits(message.totalElements.low >>> 0, message.totalElements.high >>> 0).toNumber() : message.totalElements;
                     if (message.currentPage != null && $Object.hasOwnProperty.call(message, "currentPage"))
                         object.currentPage = message.currentPage;
+                    if (message.queryTimeMs != null && $Object.hasOwnProperty.call(message, "queryTimeMs"))
+                        if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                            object.queryTimeMs = typeof message.queryTimeMs === "number" ? $BigInt(message.queryTimeMs) : $util.Long.fromBits(message.queryTimeMs.low >>> 0, message.queryTimeMs.high >>> 0, false).toBigInt();
+                        else if (typeof message.queryTimeMs === "number")
+                            object.queryTimeMs = options.longs === $String ? $String(message.queryTimeMs) : message.queryTimeMs;
+                        else
+                            object.queryTimeMs = options.longs === $String ? $util.Long.prototype.toString.call(message.queryTimeMs) : options.longs === $Number ? new $util.LongBits(message.queryTimeMs.low >>> 0, message.queryTimeMs.high >>> 0).toNumber() : message.queryTimeMs;
+                    if (message.nextCursor != null && $Object.hasOwnProperty.call(message, "nextCursor"))
+                        object.nextCursor = message.nextCursor;
+                    if (message.hasNext != null && $Object.hasOwnProperty.call(message, "hasNext"))
+                        object.hasNext = message.hasNext;
                     return object;
                 };
 
