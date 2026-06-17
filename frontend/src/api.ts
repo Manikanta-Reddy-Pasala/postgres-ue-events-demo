@@ -16,12 +16,14 @@ export const clearData = async () => {
 };
 
 export type LatencyStats = { avgMs: number; p50Ms: number; p95Ms: number; maxMs: number; samples: number };
+export type WriteStats = { events: number; ratePerSec: number };
 
 export const runBenchmark = async (durationMs = 4000) => {
     const response = await axios.post(`${API_BASE_URL}/benchmark`, null, { params: { durationMs }, timeout: 120000 });
     return response.data as {
-        durationMs: number; normal: LatencyStats; cqrs: LatencyStats;
-        eventsWrittenPerModel: number; writeRatePerSec: number;
+        durationMs: number;
+        normalRead: LatencyStats; cqrsRead: LatencyStats;
+        normalWrite: WriteStats; cqrsWrite: WriteStats;
     };
 };
 

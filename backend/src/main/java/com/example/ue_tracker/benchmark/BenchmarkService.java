@@ -39,8 +39,10 @@ public class BenchmarkService {
     private static final int WRITER_THREADS = 3;
 
     public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long maxMs, int samples) {}
-    public record Result(int durationMs, LatencyStats normal, LatencyStats cqrs,
-                         long eventsWrittenPerModel, long writeRatePerSec) {}
+    public record WriteStats(long events, long ratePerSec) {}
+    public record Result(int durationMs,
+                         LatencyStats normalRead, LatencyStats cqrsRead,
+                         WriteStats normalWrite, WriteStats cqrsWrite) {}
 
     /**
      * Hammer writes from several threads while continuously sampling read latency for each
@@ -48,33 +50,28 @@ public class BenchmarkService {
      * accumulate contention + dead-tuple bloat, which a short fixed-count run never reaches.
      */
     public Result run(int durationMs) {
-        ExecutorService writers = Executors.newFixedThreadPool(WRITER_THREADS);
+        // Independent writer pools per model so each model's sustained write rate is measured
+        // on its own (NORMAL = history insert + hot latest upsert; CQRS = write tables + outbox).
+        ExecutorService writers = Executors.newFixedThreadPool(WRITER_THREADS * 2);
         AtomicBoolean running = new AtomicBoolean(true);
-        AtomicLong written = new AtomicLong();   // events written per model
+        AtomicLong normalWritten = new AtomicLong();
+        AtomicLong cqrsWritten = new AtomicLong();
         long startNanos = System.nanoTime();
         for (int w = 0; w < WRITER_THREADS; w++) {
-            writers.submit(() -> {
-                while (running.get()) {
-                    List<UeEvent> batch = factory.randomBatch(WRITE_BATCH);
-                    try {
-                        stores.get(EventModel.NORMAL).copyIn(batch);
-                        stores.get(EventModel.CQRS).copyIn(batch);
-                        written.addAndGet(WRITE_BATCH);
-                    } catch (RuntimeException ignore) { /* keep loading */ }
-                }
-            });
+            writers.submit(() -> loadLoop(running, EventModel.NORMAL, normalWritten));
+            writers.submit(() -> loadLoop(running, EventModel.CQRS, cqrsWritten));
         }
         try {
             // warm both paths so first-sample JIT/plan cost isn't attributed unfairly
             stores.get(EventModel.NORMAL).getLatest(null, 0, 50);
             stores.get(EventModel.CQRS).getLatest(null, 0, 50);
-            LatencyStats normal = measureFor(EventModel.NORMAL, durationMs);
-            LatencyStats cqrs = measureFor(EventModel.CQRS, durationMs);
+            LatencyStats normalRead = measureFor(EventModel.NORMAL, durationMs);
+            LatencyStats cqrsRead = measureFor(EventModel.CQRS, durationMs);
             running.set(false);
             long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
-            long events = written.get();
-            long rate = elapsedMs > 0 ? events * 1000L / elapsedMs : 0;
-            return new Result(durationMs, normal, cqrs, events, rate);
+            return new Result(durationMs, normalRead, cqrsRead,
+                    writeStats(normalWritten.get(), elapsedMs),
+                    writeStats(cqrsWritten.get(), elapsedMs));
         } finally {
             running.set(false);
             writers.shutdown();
@@ -83,6 +80,22 @@ public class BenchmarkService {
             }
             writers.shutdownNow();
         }
+    }
+
+    private void loadLoop(AtomicBoolean running, EventModel model, AtomicLong counter) {
+        EventStore store = stores.get(model);
+        while (running.get()) {
+            List<UeEvent> batch = factory.randomBatch(WRITE_BATCH);
+            try {
+                store.copyIn(batch);
+                counter.addAndGet(WRITE_BATCH);
+            } catch (RuntimeException ignore) { /* keep loading */ }
+        }
+    }
+
+    private static WriteStats writeStats(long events, long elapsedMs) {
+        long rate = elapsedMs > 0 ? events * 1000L / elapsedMs : 0;
+        return new WriteStats(events, rate);
     }
 
     private LatencyStats measureFor(EventModel model, int durationMs) {

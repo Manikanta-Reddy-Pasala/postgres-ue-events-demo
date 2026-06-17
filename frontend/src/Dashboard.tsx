@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
     fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, fetchStats,
-    runBenchmark, LatencyStats, Model
+    runBenchmark, LatencyStats, WriteStats, Model
 } from './api';
 import { com } from './proto';
 
@@ -35,8 +35,9 @@ const Dashboard: React.FC = () => {
     const [backlog, setBacklog] = useState<number>(0);
     const [stats, setStats] = useState<{ uniqueImsis: number; totalEvents: number }>({ uniqueImsis: 0, totalEvents: 0 });
     const [bench, setBench] = useState<{
-        durationMs: number; normal: LatencyStats; cqrs: LatencyStats;
-        eventsWrittenPerModel: number; writeRatePerSec: number;
+        durationMs: number;
+        normalRead: LatencyStats; cqrsRead: LatencyStats;
+        normalWrite: WriteStats; cqrsWrite: WriteStats;
     } | null>(null);
     const [benchRunning, setBenchRunning] = useState(false);
 
@@ -179,37 +180,39 @@ const Dashboard: React.FC = () => {
                     </Typography>
                 </Stack>
                 {bench && (
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                        Write load during run: <b>{bench.eventsWrittenPerModel.toLocaleString()}</b> events/model
-                        (<b>{(bench.eventsWrittenPerModel * 2).toLocaleString()}</b> total across both) at
-                        ~<b>{bench.writeRatePerSec.toLocaleString()}</b> events/sec/model.
-                    </Typography>
-                )}
-                {bench && (
-                    <Table size="small" sx={{ maxWidth: 640 }}>
+                    <Table size="small" sx={{ maxWidth: 820 }}>
                         <TableHead>
                             <TableRow>
-                                <TableCell>Model</TableCell><TableCell align="right">avg</TableCell>
-                                <TableCell align="right">p50</TableCell><TableCell align="right">p95</TableCell>
-                                <TableCell align="right">max</TableCell><TableCell align="right">samples</TableCell>
+                                <TableCell>Model</TableCell>
+                                <TableCell align="right">read avg</TableCell>
+                                <TableCell align="right">p50</TableCell>
+                                <TableCell align="right">p95</TableCell>
+                                <TableCell align="right">max</TableCell>
+                                <TableCell align="right">reads</TableCell>
+                                <TableCell align="right">writes/s</TableCell>
+                                <TableCell align="right">writes</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             <TableRow>
                                 <TableCell><b>NORMAL</b> (shared tables)</TableCell>
-                                <TableCell align="right">{bench.normal.avgMs} ms</TableCell>
-                                <TableCell align="right">{bench.normal.p50Ms} ms</TableCell>
-                                <TableCell align="right">{bench.normal.p95Ms} ms</TableCell>
-                                <TableCell align="right">{bench.normal.maxMs} ms</TableCell>
-                                <TableCell align="right">{bench.normal.samples}</TableCell>
+                                <TableCell align="right">{bench.normalRead.avgMs} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.p50Ms} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.p95Ms} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.maxMs} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.samples}</TableCell>
+                                <TableCell align="right">{bench.normalWrite.ratePerSec.toLocaleString()}</TableCell>
+                                <TableCell align="right">{bench.normalWrite.events.toLocaleString()}</TableCell>
                             </TableRow>
                             <TableRow>
                                 <TableCell><b>CQRS</b> (isolated reads)</TableCell>
-                                <TableCell align="right">{bench.cqrs.avgMs} ms</TableCell>
-                                <TableCell align="right">{bench.cqrs.p50Ms} ms</TableCell>
-                                <TableCell align="right">{bench.cqrs.p95Ms} ms</TableCell>
-                                <TableCell align="right">{bench.cqrs.maxMs} ms</TableCell>
-                                <TableCell align="right">{bench.cqrs.samples}</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.avgMs} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.p50Ms} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.p95Ms} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.maxMs} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.samples}</TableCell>
+                                <TableCell align="right">{bench.cqrsWrite.ratePerSec.toLocaleString()}</TableCell>
+                                <TableCell align="right">{bench.cqrsWrite.events.toLocaleString()}</TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>

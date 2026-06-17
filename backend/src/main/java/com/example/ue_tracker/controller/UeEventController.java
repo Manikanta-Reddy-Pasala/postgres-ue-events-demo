@@ -33,8 +33,9 @@ public class UeEventController {
     @PostMapping("/benchmark")
     public Map<String, Object> benchmark(@RequestParam(defaultValue = "4000") int durationMs) {
         BenchmarkService.Result r = benchmark.run(Math.max(500, Math.min(durationMs, 15000)));
-        return Map.of("durationMs", r.durationMs(), "normal", r.normal(), "cqrs", r.cqrs(),
-                "eventsWrittenPerModel", r.eventsWrittenPerModel(), "writeRatePerSec", r.writeRatePerSec());
+        return Map.of("durationMs", r.durationMs(),
+                "normalRead", r.normalRead(), "cqrsRead", r.cqrsRead(),
+                "normalWrite", r.normalWrite(), "cqrsWrite", r.cqrsWrite());
     }
 
     @PostMapping("/generate")
