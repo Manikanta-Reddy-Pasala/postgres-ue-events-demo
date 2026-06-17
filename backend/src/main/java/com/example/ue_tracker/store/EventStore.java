@@ -2,7 +2,6 @@ package com.example.ue_tracker.store;
 
 import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.model.EventModel;
-import com.example.ue_tracker.model.PaginationStrategy;
 
 import java.util.List;
 
@@ -15,7 +14,9 @@ public interface EventStore {
     /** Remove all rows owned by this model. */
     void clear();
 
-    PageResult getLatest(PaginationStrategy strategy, int page, String cursor, int size);
+    /** Latest event per IMSI, optionally filtered (IMSI/MSISDN/RAT), OFFSET-paginated. */
+    PageResult getLatest(String filter, int page, int size);
 
-    PageResult getHistory(String imsi, PaginationStrategy strategy, int page, String cursor, int size);
+    /** Full history for one IMSI, OFFSET-paginated. */
+    PageResult getHistory(String imsi, int page, int size);
 }

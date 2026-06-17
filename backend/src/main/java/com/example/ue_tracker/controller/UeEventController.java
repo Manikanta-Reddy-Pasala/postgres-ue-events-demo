@@ -4,7 +4,6 @@ import com.example.ue.proto.UeEventPageResponse;
 import com.example.ue_tracker.cqrs.CqrsProjectorService;
 import com.example.ue_tracker.generator.GenerationService;
 import com.example.ue_tracker.model.EventModel;
-import com.example.ue_tracker.model.PaginationStrategy;
 import com.example.ue_tracker.store.EventStore;
 import com.example.ue_tracker.store.PageResult;
 import org.springframework.web.bind.annotation.*;
@@ -47,24 +46,21 @@ public class UeEventController {
 
     @GetMapping(value = "/events/latest", produces = "application/x-protobuf")
     public UeEventPageResponse latest(@RequestParam EventModel model,
-                                      @RequestParam PaginationStrategy strategy,
+                                      @RequestParam(required = false) String q,
                                       @RequestParam(defaultValue = "0") int page,
-                                      @RequestParam(required = false) String cursor,
                                       @RequestParam(defaultValue = "50") int size) {
         long start = System.nanoTime();
-        PageResult r = stores.get(model).getLatest(strategy, page, cursor, size);
+        PageResult r = stores.get(model).getLatest(q, page, size);
         return toProto(r, System.nanoTime() - start);
     }
 
     @GetMapping(value = "/events/{imsi}/history", produces = "application/x-protobuf")
     public UeEventPageResponse history(@PathVariable String imsi,
                                        @RequestParam EventModel model,
-                                       @RequestParam PaginationStrategy strategy,
                                        @RequestParam(defaultValue = "0") int page,
-                                       @RequestParam(required = false) String cursor,
                                        @RequestParam(defaultValue = "50") int size) {
         long start = System.nanoTime();
-        PageResult r = stores.get(model).getHistory(imsi, strategy, page, cursor, size);
+        PageResult r = stores.get(model).getHistory(imsi, page, size);
         return toProto(r, System.nanoTime() - start);
     }
 
@@ -75,8 +71,6 @@ public class UeEventController {
                 .setTotalElements(r.totalElements())
                 .setCurrentPage(r.currentPage())
                 .setQueryTimeMs(elapsedNanos / 1_000_000L)
-                .setNextCursor(r.nextCursor() == null ? "" : r.nextCursor())
-                .setHasNext(r.hasNext())
                 .build();
     }
 }

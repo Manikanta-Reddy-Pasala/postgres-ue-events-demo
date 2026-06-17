@@ -1,3 +1,7 @@
 
 # graphify generated knowledge graph (regenerate with: graphify update .)
 graphify-out/
+
+# local dev compose (ad-hoc ports)
+docker-compose.local.yml
+docker-compose.yml

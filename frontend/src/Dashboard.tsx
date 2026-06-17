@@ -6,29 +6,30 @@ import {
     TextField, Chip, Stack
 } from '@mui/material';
 import {
-    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, Model, Strategy
+    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, Model
 } from './api';
 import { com } from './proto';
 
 type UeEvent = com.example.ue.IUeEvent;
 
+const PAGE_SIZE = 50;
+
 const Dashboard: React.FC = () => {
     const [model, setModel] = useState<Model>('NORMAL');
-    const [strategy, setStrategy] = useState<Strategy>('OFFSET');
 
     const [events, setEvents] = useState<UeEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [queryMs, setQueryMs] = useState<number>(0);
 
-    // offset paging
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    // keyset paging
-    const [cursorStack, setCursorStack] = useState<string[]>([]);
-    const [nextCursor, setNextCursor] = useState<string>('');
-    const [hasNext, setHasNext] = useState(false);
+    const [totalElements, setTotalElements] = useState(0);
 
-    const [count, setCount] = useState<number>(100000);
+    // single search box: matches IMSI / MSISDN / RAT
+    const [search, setSearch] = useState('');
+    const [activeFilter, setActiveFilter] = useState('');
+
+    const [count, setCount] = useState<number>(10000);
     const [genMsg, setGenMsg] = useState<string>('');
     const [backlog, setBacklog] = useState<number>(0);
 
@@ -39,25 +40,24 @@ const Dashboard: React.FC = () => {
     const [historyMs, setHistoryMs] = useState<number>(0);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    const loadLatest = useCallback(async (p: number, cursor: string | null) => {
+    const loadLatest = useCallback(async (p: number, filter: string) => {
         setLoading(true);
         try {
-            const r = await fetchLatest(model, strategy, p - 1, cursor);
+            const r = await fetchLatest(model, p - 1, PAGE_SIZE, filter);
             setEvents(r.events || []);
             setQueryMs(Number(r.queryTimeMs || 0));
             setTotalPages(r.totalPages || 1);
-            setNextCursor(r.nextCursor || '');
-            setHasNext(!!r.hasNext);
+            setTotalElements(Number(r.totalElements || 0));
         } catch (e) { console.error(e); } finally { setLoading(false); }
-    }, [model, strategy]);
+    }, [model]);
 
-    // reset + reload whenever model/strategy changes
+    // reload when model changes (keep current filter)
     useEffect(() => {
-        setPage(1); setCursorStack([]); setNextCursor(''); setHasNext(false);
-        loadLatest(1, null);
-    }, [model, strategy, loadLatest]);
+        setPage(1);
+        loadLatest(1, activeFilter);
+    }, [model, activeFilter, loadLatest]);
 
-    // poll projection backlog when in CQRS mode
+    // poll projection backlog in CQRS mode
     useEffect(() => {
         if (model !== 'CQRS') { setBacklog(0); return; }
         const id = setInterval(async () => {
@@ -71,8 +71,8 @@ const Dashboard: React.FC = () => {
         try {
             const r = await generateData(count);
             setGenMsg(`Generated ${r.count.toLocaleString()} — normal: ${r.normalMs} ms · cqrs-write: ${r.cqrsWriteMs} ms`);
-            setPage(1); setCursorStack([]);
-            await loadLatest(1, null);
+            setPage(1);
+            await loadLatest(1, activeFilter);
         } catch (e) { setGenMsg('Generation failed (see console)'); console.error(e); }
     };
 
@@ -82,28 +82,21 @@ const Dashboard: React.FC = () => {
         try {
             await clearData();
             setGenMsg('Cleared all data (both models)');
-            setPage(1); setCursorStack([]); setNextCursor(''); setHasNext(false);
-            await loadLatest(1, null);
+            setPage(1);
+            await loadLatest(1, activeFilter);
         } catch (e) { setGenMsg('Clear failed (see console)'); console.error(e); }
     };
 
-    const onOffsetPage = (_: unknown, value: number) => { setPage(value); loadLatest(value, null); };
-    const onKeysetNext = () => {
-        setCursorStack(s => [...s, nextCursor]);
-        loadLatest(1, nextCursor);
-    };
-    const onKeysetPrev = () => {
-        const s = [...cursorStack]; s.pop();
-        const prev = s.length ? s[s.length - 1] : null;
-        setCursorStack(s);
-        loadLatest(1, prev);
-    };
+    const runSearch = () => { setPage(1); setActiveFilter(search); };
+    const clearSearch = () => { setSearch(''); setPage(1); setActiveFilter(''); };
+
+    const onPage = (_: unknown, value: number) => { setPage(value); loadLatest(value, activeFilter); };
 
     const openHistory = async (imsi?: string | null) => {
         if (!imsi) return;
         setSelectedImsi(imsi); setHistoryOpen(true); setHistoryLoading(true);
         try {
-            const r = await fetchHistory(imsi, model, strategy, 0, null);
+            const r = await fetchHistory(imsi, model, 0, PAGE_SIZE);
             setHistoryEvents(r.events || []);
             setHistoryMs(Number(r.queryTimeMs || 0));
         } catch (e) { console.error(e); } finally { setHistoryLoading(false); }
@@ -126,15 +119,19 @@ const Dashboard: React.FC = () => {
                     <ToggleButton value="CQRS">CQRS (Read-Write Sep)</ToggleButton>
                 </ToggleButtonGroup>
 
-                <ToggleButtonGroup size="small" exclusive value={strategy}
-                    onChange={(_, v) => v && setStrategy(v)}>
-                    <ToggleButton value="OFFSET">Offset</ToggleButton>
-                    <ToggleButton value="KEYSET">Keyset</ToggleButton>
-                </ToggleButtonGroup>
-
                 <Chip color="info" label={`Latest query: ${queryMs} ms`} />
+                <Chip variant="outlined" label={`${totalElements.toLocaleString()} rows · ${totalPages} pages`} />
                 {model === 'CQRS' && <Chip color="warning" label={`Projection backlog: ${backlog.toLocaleString()}`} />}
-                <Button variant="outlined" size="small" onClick={() => loadLatest(page, null)}>Refresh</Button>
+                <Button variant="outlined" size="small" onClick={() => loadLatest(page, activeFilter)}>Refresh</Button>
+            </Stack>
+
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <TextField size="small" label="Search IMSI / MSISDN / RAT" value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') runSearch(); }} sx={{ width: 320 }} />
+                <Button variant="contained" onClick={runSearch}>Search</Button>
+                <Button variant="text" onClick={clearSearch} disabled={!activeFilter}>Clear</Button>
+                {activeFilter && <Chip color="secondary" label={`filter: "${activeFilter}"`} onDelete={clearSearch} />}
             </Stack>
 
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
@@ -174,21 +171,16 @@ const Dashboard: React.FC = () => {
                                     </TableCell>
                                 </TableRow>
                             ))}
+                            {events.length === 0 && (
+                                <TableRow><TableCell colSpan={9} align="center">No rows</TableCell></TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
             )}
 
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                {strategy === 'OFFSET' ? (
-                    <Pagination count={totalPages} page={page} onChange={onOffsetPage} color="primary"
-                        siblingCount={2} />
-                ) : (
-                    <Stack direction="row" spacing={2} alignItems="center">
-                        <Button variant="outlined" disabled={cursorStack.length === 0} onClick={onKeysetPrev}>Prev</Button>
-                        <Button variant="outlined" disabled={!hasNext} onClick={onKeysetNext}>Next</Button>
-                    </Stack>
-                )}
+                <Pagination count={totalPages} page={page} onChange={onPage} color="primary" siblingCount={2} />
             </Box>
 
             <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="lg" fullWidth>

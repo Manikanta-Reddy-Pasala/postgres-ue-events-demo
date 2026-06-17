@@ -2,7 +2,6 @@ package com.example.ue_tracker.store;
 
 import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.model.EventModel;
-import com.example.ue_tracker.model.PaginationStrategy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,11 +12,11 @@ import java.util.List;
 public class CqrsEventStore implements EventStore {
 
     private final CopySupport copy;
-    private final SeekQuery seek;
+    private final EventQuery query;
     private final JdbcTemplate jdbc;
 
-    CqrsEventStore(CopySupport copy, SeekQuery seek, JdbcTemplate jdbc) {
-        this.copy = copy; this.seek = seek; this.jdbc = jdbc;
+    CqrsEventStore(CopySupport copy, EventQuery query, JdbcTemplate jdbc) {
+        this.copy = copy; this.query = query; this.jdbc = jdbc;
     }
 
     @Override public EventModel model() { return EventModel.CQRS; }
@@ -48,12 +47,12 @@ public class CqrsEventStore implements EventStore {
     }
 
     @Override
-    public PageResult getLatest(PaginationStrategy strategy, int page, String cursor, int size) {
-        return seek.query("cqrs_read_latest", null, strategy, page, cursor, size);
+    public PageResult getLatest(String filter, int page, int size) {
+        return query.page("cqrs_read_latest", null, filter, page, size);
     }
 
     @Override
-    public PageResult getHistory(String imsi, PaginationStrategy strategy, int page, String cursor, int size) {
-        return seek.query("cqrs_read_history", imsi, strategy, page, cursor, size);
+    public PageResult getHistory(String imsi, int page, int size) {
+        return query.page("cqrs_read_history", imsi, null, page, size);
     }
 }

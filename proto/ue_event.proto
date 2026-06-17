@@ -61,8 +61,6 @@ message UeEventPageResponse {
   int64 total_elements = 3;
   int32 current_page = 4;
   int64 query_time_ms = 5;
-  string next_cursor = 6; // keyset: opaque cursor for next page; empty when none
-  bool has_next = 7;
 }
 
 message EmptyRequest {}

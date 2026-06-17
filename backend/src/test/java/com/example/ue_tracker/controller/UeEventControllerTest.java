@@ -19,9 +19,11 @@ class UeEventControllerTest extends AbstractPostgresTest {
     void generateThenReadLatestNormalReturnsTimedProtobuf() throws Exception {
         rest.postForObject("/api/generate?count=200", null, String.class);
         ResponseEntity<byte[]> resp = rest.getForEntity(
-                "/api/events/latest?model=NORMAL&strategy=KEYSET&size=50", byte[].class);
+                "/api/events/latest?model=NORMAL&page=0&size=50", byte[].class);
         UeEventPageResponse page = UeEventPageResponse.parseFrom(resp.getBody());
         assertFalse(page.getEventsList().isEmpty());
         assertTrue(page.getQueryTimeMs() >= 0);
+        assertTrue(page.getTotalElements() > 0);
+        assertTrue(page.getTotalPages() >= 1);
     }
 }
