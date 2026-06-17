@@ -5,6 +5,7 @@ import com.example.ue_tracker.cqrs.CqrsProjectorService;
 import com.example.ue_tracker.generator.EventFactory;
 import com.example.ue_tracker.model.EventModel;
 import com.example.ue_tracker.store.EventStore;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -41,12 +42,21 @@ public class BenchmarkService {
 
     private final EventFactory factory;
     private final CqrsProjectorService projector;
+    private final JdbcTemplate jdbc;
     private final Map<EventModel, EventStore> stores = new EnumMap<>(EventModel.class);
 
-    public BenchmarkService(EventFactory factory, CqrsProjectorService projector, List<EventStore> storeList) {
+    public BenchmarkService(EventFactory factory, CqrsProjectorService projector,
+                            JdbcTemplate jdbc, List<EventStore> storeList) {
         this.factory = factory;
         this.projector = projector;
+        this.jdbc = jdbc;
         storeList.forEach(s -> stores.put(s.model(), s));
+    }
+
+    /** Count-free page fetch (index seek, LIMIT 50) so latency reflects contention, not count(*) size. */
+    private void readPage(String table) {
+        jdbc.queryForList("SELECT * FROM " + table +
+                " WHERE imsi_or_supi = ? ORDER BY updated_at DESC, id DESC LIMIT 50", HOT_IMSI);
     }
 
     public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long maxMs, int samples) {}
@@ -68,10 +78,10 @@ public class BenchmarkService {
         }
         try {
             // warm both paths so first-sample JIT/plan cost isn't attributed unfairly
-            stores.get(EventModel.NORMAL).getHistory(HOT_IMSI, 0, 50);
-            stores.get(EventModel.CQRS).getHistory(HOT_IMSI, 0, 50);
-            Sampled normal = measureFor(EventModel.NORMAL, normalLoadEvents::get, durationMs);
-            Sampled cqrs = measureFor(EventModel.CQRS, projector::projectedRows, durationMs);
+            readPage("ue_events_history");
+            readPage("cqrs_read_history");
+            Sampled normal = measureFor("ue_events_history", normalLoadEvents::get, durationMs);
+            Sampled cqrs = measureFor("cqrs_read_history", projector::projectedRows, durationMs);
             return new Result(durationMs, normal.read(), cqrs.read(), normal.write(), cqrs.write());
         } finally {
             running.set(false);
@@ -94,16 +104,15 @@ public class BenchmarkService {
         }
     }
 
-    /** Sample read latency for {@code durationMs}; {@code readTableWrites} counts writes hitting the read table. */
-    private Sampled measureFor(EventModel model, LongSupplier readTableWrites, int durationMs) {
-        EventStore store = stores.get(model);
+    /** Sample read latency for {@code durationMs}; {@code readTableWrites} counts writes hitting {@code readTable}. */
+    private Sampled measureFor(String readTable, LongSupplier readTableWrites, int durationMs) {
         long writesBefore = readTableWrites.getAsLong();
         List<Long> samples = new ArrayList<>();
         long start = System.nanoTime();
         long end = start + durationMs * 1_000_000L;
         while (System.nanoTime() < end) {
             long t = System.nanoTime();
-            store.getHistory(HOT_IMSI, 0, 50);   // reads the history table the write counter tracks
+            readPage(readTable);   // count-free page read of the table the write counter tracks
             samples.add((System.nanoTime() - t) / 1_000_000L);
         }
         long wallMs = (System.nanoTime() - start) / 1_000_000L;

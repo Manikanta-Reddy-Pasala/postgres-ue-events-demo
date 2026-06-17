@@ -174,9 +174,11 @@ const Dashboard: React.FC = () => {
                     </Button>
                     {benchRunning && <CircularProgress size={20} />}
                     <Typography variant="body2" color="text.secondary">
-                        Hammers writes (3 threads) for ~4s while continuously sampling read latency on each model.
-                        NORMAL reads contend with the write storm on shared tables; CQRS reads hit isolated read tables.
-                        Best run on a large dataset (Generate first).
+                        Hammers writes (3 threads/model) for ~4s while sampling a count-free history read on each
+                        model's read table. The real signal is <b>writes/s to read table</b>: NORMAL's read table
+                        absorbs the full write load; CQRS's read table sees only the projector (≈0 at steady state).
+                        Read latency stays low for both on a single node (Postgres MVCC reads don't block on writers,
+                        data fits in cache) — latency only diverges under IO saturation / a read-replica split.
                     </Typography>
                 </Stack>
                 {bench && (
