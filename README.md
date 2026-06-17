@@ -62,6 +62,20 @@ server-measured query time shown in the UI.
  └──────────────┘                      └───────────────────────────┘          └────────────┘
 ```
 
+## Data mapping layer (proto ⇄ Postgres)
+
+Events travel as **protobuf** over HTTP (the small generate/clear/status responses are JSON).
+Conversion to/from the DB is split by direction — note the save path does **not** use the adapter:
+
+```
+ SAVE (write):   UeEvent (proto) ──► CopySupport.toCsv ──► CSV ──► COPY into Postgres
+ FETCH (read):   Postgres ResultSet ──► UeEventAdapter.fromRow ──► UeEvent (proto) ──► HTTP (protobuf)
+```
+
+- `CopySupport.toCsv` — proto getters → CSV rows for bulk `COPY` (write side).
+- `UeEventAdapter.fromRow` — `ResultSet` → proto, used by `SeekQuery` (read side only).
+- `CursorCodec` — keyset cursor ⇄ opaque base64 token (pagination, not row data).
+
 ## Architecture — NORMAL model (2 tables)
 
 ```
