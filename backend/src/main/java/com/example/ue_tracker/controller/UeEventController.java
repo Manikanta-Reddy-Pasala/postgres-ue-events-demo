@@ -30,7 +30,8 @@ public class UeEventController {
     @PostMapping("/generate")
     public Map<String, Object> generate(@RequestParam(defaultValue = "1000") int count) {
         GenerationService.Result r = generation.generate(count);
-        return Map.of("count", r.count(), "normalMs", r.normalMs(), "cqrsWriteMs", r.cqrsWriteMs());
+        return Map.of("uniqueImsis", r.uniqueImsis(), "totalEvents", r.totalEvents(),
+                "normalMs", r.normalMs(), "cqrsWriteMs", r.cqrsWriteMs());
     }
 
     @PostMapping("/clear")

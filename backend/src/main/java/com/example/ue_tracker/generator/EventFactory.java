@@ -25,10 +25,50 @@ public class EventFactory {
             "424021478673420", "424021478673421", "424021478673422", "424021478673423", "424021478673424"
     };
 
+    private static final long IMSI_BASE = 424021478600000L;
+
     public List<UeEvent> randomBatch(int count) {
         List<UeEvent> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) out.add(randomEvent());
         return out;
+    }
+
+    /** Deterministic distinct 15-digit IMSI for index. */
+    public String imsiAt(long index) {
+        return String.format("%015d", IMSI_BASE + index);
+    }
+
+    /** Event for a specific IMSI at a specific timestamp; all other fields random. */
+    public UeEvent eventFor(String imsi, Instant ts) {
+        int c = random.nextInt(COUNTRIES.length);
+        String t = ts.toString();
+        return UeEvent.newBuilder()
+                .setImsiOrSupi(imsi)
+                .setImei("35" + String.format("%013d", random.nextLong(10000000000000L)))
+                .setMsisdn("+97150" + String.format("%07d", random.nextInt(10000000)))
+                .setGuti("424023" + String.format("%014d", random.nextLong(100000000000000L)))
+                .setTmsi(String.format("%010d", random.nextLong(10000000000L)))
+                .setRssi(-50 - random.nextInt(50))
+                .setActionTaken(ActionTaken.valueOf(ACTIONS[random.nextInt(ACTIONS.length)]))
+                .setRejectCause(random.nextInt(20))
+                .setRat(RatType.valueOf(RAT_TYPES[random.nextInt(RAT_TYPES.length)]))
+                .setFrequencyBand(random.nextInt(40) + 1)
+                .setArfcn(100 + random.nextInt(1000))
+                .setTrackingAreaCode(40000 + random.nextInt(1000))
+                .setDownlinkBandWidth(random.nextBoolean() ? "FIVE_MHZ" : "TEN_MHZ")
+                .setPlmnMcc(424).setPlmnMnc(2)
+                .setProviderName(PROVIDERS[random.nextInt(PROVIDERS.length)])
+                .setMissionId(UUID.randomUUID().toString())
+                .setSensorId("sensor-" + random.nextInt(100))
+                .setSubsystemId("sys-l" + random.nextInt(5) + "-" + random.nextInt(10))
+                .setTrxCommandId("cmd_" + random.nextInt(1000))
+                .setCreatedAt(t).setUpdatedAt(t)
+                .setCountryIsoAlpha2(COUNTRIES[c]).setCountryName(COUNTRY_NAMES[c])
+                .setTarget(random.nextInt(100) > 95)
+                .setCaptureCount(1 + random.nextInt(20))
+                .setTimingAdvance(random.nextInt(100))
+                .setDistanceInMeters(100 + random.nextInt(5000))
+                .build();
     }
 
     public UeEvent randomEvent() {

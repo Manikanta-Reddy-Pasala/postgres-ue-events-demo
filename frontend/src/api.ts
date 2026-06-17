@@ -7,7 +7,7 @@ export type Model = 'NORMAL' | 'CQRS';
 
 export const generateData = async (count: number) => {
     const response = await axios.post(`${API_BASE_URL}/generate`, null, { params: { count } });
-    return response.data as { count: number; normalMs: number; cqrsWriteMs: number };
+    return response.data as { uniqueImsis: number; totalEvents: number; normalMs: number; cqrsWriteMs: number };
 };
 
 export const clearData = async () => {

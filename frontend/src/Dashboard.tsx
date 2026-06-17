@@ -29,7 +29,7 @@ const Dashboard: React.FC = () => {
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState('');
 
-    const [count, setCount] = useState<number>(10000);
+    const [count, setCount] = useState<number>(1000);
     const [genMsg, setGenMsg] = useState<string>('');
     const [backlog, setBacklog] = useState<number>(0);
     const [stats, setStats] = useState<{ uniqueImsis: number; totalEvents: number }>({ uniqueImsis: 0, totalEvents: 0 });
@@ -72,7 +72,7 @@ const Dashboard: React.FC = () => {
         setGenMsg('Generating…');
         try {
             const r = await generateData(count);
-            setGenMsg(`Generated ${r.count.toLocaleString()} — normal: ${r.normalMs} ms · cqrs-write: ${r.cqrsWriteMs} ms`);
+            setGenMsg(`Generated ${r.uniqueImsis.toLocaleString()} IMSIs · ${r.totalEvents.toLocaleString()} events — normal: ${r.normalMs} ms · cqrs-write: ${r.cqrsWriteMs} ms`);
             setPage(1);
             await loadLatest(1, activeFilter);
         } catch (e) { setGenMsg('Generation failed (see console)'); console.error(e); }
@@ -114,8 +114,9 @@ const Dashboard: React.FC = () => {
         <Box sx={{ p: 4 }}>
             <Typography variant="h4" gutterBottom>UE Events — Pagination Benchmark</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                The table lists the <b>latest event per IMSI</b> (one row per UE), so it shows unique IMSIs — not the
-                total events generated. Every event is kept in history; click <b>History</b> on a row to page through them.
+                <b>Generate</b> creates that many <b>unique IMSIs</b>, each with 100–1000 history events. The table lists
+                the <b>latest event per IMSI</b> (one row per UE); every event is kept in history — click <b>History</b>
+                on a row to page through them.
             </Typography>
 
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
@@ -144,7 +145,8 @@ const Dashboard: React.FC = () => {
             </Stack>
 
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                <TextField size="small" type="number" label="Record count" value={count}
+                <TextField size="small" type="number" label="Unique IMSIs" value={count}
+                    helperText="each gets 100–1000 events"
                     onChange={e => setCount(parseInt(e.target.value || '0', 10))} sx={{ width: 180 }} />
                 <Button variant="contained" onClick={onGenerate}>Generate Data</Button>
                 <Button variant="outlined" color="error" onClick={onClear}>Clear Data</Button>

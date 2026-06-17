@@ -13,12 +13,20 @@ class GenerationServiceTest extends AbstractPostgresTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test
-    void generatesIntoBothModelsAndReportsTimes() {
-        GenerationService.Result r = gen.generate(1200);
-        assertEquals(1200, r.count());
-        assertTrue(r.normalMs() >= 0);
-        assertTrue(r.cqrsWriteMs() >= 0);
-        assertEquals(1200L, jdbc.queryForObject("SELECT count(*) FROM ue_events_history", Long.class));
-        assertEquals(1200L, jdbc.queryForObject("SELECT count(*) FROM cqrs_write_history", Long.class));
+    void generatesUniqueImsisEachWithRandomEventCount() {
+        int uniqueImsis = 5;
+        GenerationService.Result r = gen.generate(uniqueImsis);
+
+        assertEquals(uniqueImsis, r.uniqueImsis());
+        // each IMSI has between MIN and MAX events
+        assertTrue(r.totalEvents() >= (long) uniqueImsis * GenerationService.MIN_EVENTS);
+        assertTrue(r.totalEvents() <= (long) uniqueImsis * GenerationService.MAX_EVENTS);
+
+        // latest table = one row per IMSI; history = all events (both models)
+        assertEquals(uniqueImsis, (long) jdbc.queryForObject("SELECT count(*) FROM ue_events", Long.class));
+        assertEquals(r.totalEvents(), (long) jdbc.queryForObject("SELECT count(*) FROM ue_events_history", Long.class));
+        assertEquals(uniqueImsis,
+                (long) jdbc.queryForObject("SELECT count(DISTINCT imsi_or_supi) FROM ue_events_history", Long.class));
+        assertEquals(r.totalEvents(), (long) jdbc.queryForObject("SELECT count(*) FROM cqrs_write_history", Long.class));
     }
 }
