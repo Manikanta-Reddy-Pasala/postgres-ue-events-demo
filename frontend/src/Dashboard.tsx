@@ -189,30 +189,30 @@ const Dashboard: React.FC = () => {
                                 <TableCell align="right">p95</TableCell>
                                 <TableCell align="right">max</TableCell>
                                 <TableCell align="right">reads</TableCell>
-                                <TableCell align="right">writes/s</TableCell>
+                                <TableCell align="right">writes/s&nbsp;to&nbsp;read&nbsp;table</TableCell>
                                 <TableCell align="right">writes</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             <TableRow>
-                                <TableCell><b>NORMAL</b> (shared tables)</TableCell>
+                                <TableCell><b>NORMAL</b> — reads ue_events_history (load writes here)</TableCell>
                                 <TableCell align="right">{bench.normalRead.avgMs} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.p50Ms} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.p95Ms} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.maxMs} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.samples}</TableCell>
-                                <TableCell align="right">{bench.normalWrite.ratePerSec.toLocaleString()}</TableCell>
-                                <TableCell align="right">{bench.normalWrite.events.toLocaleString()}</TableCell>
+                                <TableCell align="right">{bench.normalWrite.writesPerSec.toLocaleString()}</TableCell>
+                                <TableCell align="right">{bench.normalWrite.writesToReadTable.toLocaleString()}</TableCell>
                             </TableRow>
                             <TableRow>
-                                <TableCell><b>CQRS</b> (isolated reads)</TableCell>
+                                <TableCell><b>CQRS</b> — reads cqrs_read_history (projector writes here)</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.avgMs} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.p50Ms} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.p95Ms} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.maxMs} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.samples}</TableCell>
-                                <TableCell align="right">{bench.cqrsWrite.ratePerSec.toLocaleString()}</TableCell>
-                                <TableCell align="right">{bench.cqrsWrite.events.toLocaleString()}</TableCell>
+                                <TableCell align="right">{bench.cqrsWrite.writesPerSec.toLocaleString()}</TableCell>
+                                <TableCell align="right">{bench.cqrsWrite.writesToReadTable.toLocaleString()}</TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>

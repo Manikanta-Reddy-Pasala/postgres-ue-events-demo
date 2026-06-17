@@ -1,77 +1,76 @@
 package com.example.ue_tracker.benchmark;
 
 import com.example.ue.proto.UeEvent;
+import com.example.ue_tracker.cqrs.CqrsProjectorService;
 import com.example.ue_tracker.generator.EventFactory;
 import com.example.ue_tracker.model.EventModel;
 import com.example.ue_tracker.store.EventStore;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 
 /**
- * Measures read latency for both models while a background write load runs concurrently.
- * Demonstrates CQRS read/write isolation: under load NORMAL reads contend with the write
- * storm on the same tables (and its hot latest table bloats from upsert churn), while CQRS
- * reads hit isolated read tables and stay flat.
+ * Measures read latency for both models under a background write load, plus how many writes
+ * land on the table each model READS during its sampling window:
+ * <ul>
+ *   <li>NORMAL reads {@code ue_events_history} — written directly by the load writers, so its
+ *       read-table write rate = the load rate.</li>
+ *   <li>CQRS reads {@code cqrs_read_history} — written only by the projector (load writers hit
+ *       the separate write tables + outbox), so its read-table write rate = projector throughput
+ *       (≈0 at steady state).</li>
+ * </ul>
+ * Counters are in-memory (load writer + projector) so measuring them adds no DB cost.
  */
 @Service
 public class BenchmarkService {
 
     private static final int WRITE_BATCH = 2000;
+    private static final int WRITER_THREADS = 3;
 
     private final EventFactory factory;
+    private final CqrsProjectorService projector;
     private final Map<EventModel, EventStore> stores = new EnumMap<>(EventModel.class);
 
-    public BenchmarkService(EventFactory factory, List<EventStore> storeList) {
+    public BenchmarkService(EventFactory factory, CqrsProjectorService projector, List<EventStore> storeList) {
         this.factory = factory;
+        this.projector = projector;
         storeList.forEach(s -> stores.put(s.model(), s));
     }
 
-    private static final int WRITER_THREADS = 3;
-
     public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long maxMs, int samples) {}
-    public record WriteStats(long events, long ratePerSec) {}
+    /** Writes that landed on the table this model reads, during its window. */
+    public record WriteStats(long writesToReadTable, long writesPerSec) {}
     public record Result(int durationMs,
                          LatencyStats normalRead, LatencyStats cqrsRead,
                          WriteStats normalWrite, WriteStats cqrsWrite) {}
 
-    /**
-     * Hammer writes from several threads while continuously sampling read latency for each
-     * model over {@code durationMs}. Sustained load lets NORMAL's shared/upsert-churned tables
-     * accumulate contention + dead-tuple bloat, which a short fixed-count run never reaches.
-     */
+    private record Sampled(LatencyStats read, WriteStats write) {}
+
     public Result run(int durationMs) {
-        // Independent writer pools per model so each model's sustained write rate is measured
-        // on its own (NORMAL = history insert + hot latest upsert; CQRS = write tables + outbox).
         ExecutorService writers = Executors.newFixedThreadPool(WRITER_THREADS * 2);
         AtomicBoolean running = new AtomicBoolean(true);
-        AtomicLong normalWritten = new AtomicLong();
-        AtomicLong cqrsWritten = new AtomicLong();
-        long startNanos = System.nanoTime();
+        AtomicLong normalLoadEvents = new AtomicLong(); // inserts the load makes into ue_events_history
         for (int w = 0; w < WRITER_THREADS; w++) {
-            writers.submit(() -> loadLoop(running, EventModel.NORMAL, normalWritten));
-            writers.submit(() -> loadLoop(running, EventModel.CQRS, cqrsWritten));
+            writers.submit(() -> loadLoop(running, EventModel.NORMAL, normalLoadEvents));
+            writers.submit(() -> loadLoop(running, EventModel.CQRS, null));
         }
         try {
             // warm both paths so first-sample JIT/plan cost isn't attributed unfairly
             stores.get(EventModel.NORMAL).getLatest(null, 0, 50);
             stores.get(EventModel.CQRS).getLatest(null, 0, 50);
-            LatencyStats normalRead = measureFor(EventModel.NORMAL, durationMs);
-            LatencyStats cqrsRead = measureFor(EventModel.CQRS, durationMs);
-            running.set(false);
-            long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
-            return new Result(durationMs, normalRead, cqrsRead,
-                    writeStats(normalWritten.get(), elapsedMs),
-                    writeStats(cqrsWritten.get(), elapsedMs));
+            Sampled normal = measureFor(EventModel.NORMAL, normalLoadEvents::get, durationMs);
+            Sampled cqrs = measureFor(EventModel.CQRS, projector::projectedRows, durationMs);
+            return new Result(durationMs, normal.read(), cqrs.read(), normal.write(), cqrs.write());
         } finally {
             running.set(false);
             writers.shutdown();
@@ -88,29 +87,33 @@ public class BenchmarkService {
             List<UeEvent> batch = factory.randomBatch(WRITE_BATCH);
             try {
                 store.copyIn(batch);
-                counter.addAndGet(WRITE_BATCH);
+                if (counter != null) counter.addAndGet(WRITE_BATCH);
             } catch (RuntimeException ignore) { /* keep loading */ }
         }
     }
 
-    private static WriteStats writeStats(long events, long elapsedMs) {
-        long rate = elapsedMs > 0 ? events * 1000L / elapsedMs : 0;
-        return new WriteStats(events, rate);
-    }
-
-    private LatencyStats measureFor(EventModel model, int durationMs) {
+    /** Sample read latency for {@code durationMs}; {@code readTableWrites} counts writes hitting the read table. */
+    private Sampled measureFor(EventModel model, LongSupplier readTableWrites, int durationMs) {
         EventStore store = stores.get(model);
-        List<Long> samples = new java.util.ArrayList<>();
-        long end = System.nanoTime() + durationMs * 1_000_000L;
+        long writesBefore = readTableWrites.getAsLong();
+        List<Long> samples = new ArrayList<>();
+        long start = System.nanoTime();
+        long end = start + durationMs * 1_000_000L;
         while (System.nanoTime() < end) {
             long t = System.nanoTime();
             store.getLatest(null, 0, 50);
             samples.add((System.nanoTime() - t) / 1_000_000L);
         }
+        long wallMs = (System.nanoTime() - start) / 1_000_000L;
+        long writeDelta = Math.max(0, readTableWrites.getAsLong() - writesBefore);
+        long writeRate = wallMs > 0 ? writeDelta * 1000L / wallMs : 0;
+
         long[] ms = samples.stream().mapToLong(Long::longValue).sorted().toArray();
-        if (ms.length == 0) return new LatencyStats(0, 0, 0, 0, 0);
-        double avg = Arrays.stream(ms).average().orElse(0);
-        return new LatencyStats(round(avg), pct(ms, 50), pct(ms, 95), ms[ms.length - 1], ms.length);
+        LatencyStats latency = ms.length == 0
+                ? new LatencyStats(0, 0, 0, 0, 0)
+                : new LatencyStats(round(Arrays.stream(ms).average().orElse(0)),
+                        pct(ms, 50), pct(ms, 95), ms[ms.length - 1], ms.length);
+        return new Sampled(latency, new WriteStats(writeDelta, writeRate));
     }
 
     private static long pct(long[] sorted, int p) {

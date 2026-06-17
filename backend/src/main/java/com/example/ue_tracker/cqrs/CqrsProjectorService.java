@@ -26,9 +26,13 @@ public class CqrsProjectorService {
 
     private final JdbcTemplate jdbc;
     private final ReentrantLock lock = new ReentrantLock();
+    private final java.util.concurrent.atomic.AtomicLong projectedRows = new java.util.concurrent.atomic.AtomicLong();
     @Value("${benchmark.projector.batch-size:2000}") int batchSize;
 
     public CqrsProjectorService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+
+    /** Total rows projected into the CQRS read tables since startup (writes that hit the read side). */
+    public long projectedRows() { return projectedRows.get(); }
 
     @Scheduled(fixedDelayString = "${benchmark.projector.fixed-delay:1000}")
     public void scheduledDrain() {
@@ -75,6 +79,7 @@ public class CqrsProjectorService {
                 " ORDER BY wh.imsi_or_supi, wh.updated_at DESC " +
                 EventSql.onConflictUpdate("cqrs_read_latest"));
         jdbc.update("DELETE FROM cqrs_outbox WHERE seq IN (" + seqs + ")");
+        projectedRows.addAndGet(claimed.size());
         return claimed.size();
     }
 
