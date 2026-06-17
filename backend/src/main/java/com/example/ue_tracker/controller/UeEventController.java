@@ -36,7 +36,8 @@ public class UeEventController {
 
     @PostMapping("/clear")
     public Map<String, Object> clear() {
-        stores.values().forEach(EventStore::clear);
+        // pause the CQRS projector while truncating so the TRUNCATE can't deadlock with a drain
+        projector.runExclusive(() -> stores.values().forEach(EventStore::clear));
         return Map.of("cleared", true);
     }
 

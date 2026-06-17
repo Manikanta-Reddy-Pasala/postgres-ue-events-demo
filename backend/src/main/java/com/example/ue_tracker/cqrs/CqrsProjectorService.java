@@ -9,24 +9,43 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
  * Drains the CQRS outbox into the read tables. Uses {@code FOR UPDATE SKIP LOCKED}
  * so concurrent drains never double-project. Scheduled, but also callable directly.
+ *
+ * <p>A {@link ReentrantLock} serializes draining against exclusive operations like a
+ * TRUNCATE (clear): the drain takes the lock per batch and releases it between batches,
+ * so {@link #runExclusive} (used by clear) gets in within one batch instead of waiting
+ * for the whole backlog — and the two never deadlock on the CQRS tables.
  */
 @Service
 public class CqrsProjectorService {
 
     private final JdbcTemplate jdbc;
+    private final ReentrantLock lock = new ReentrantLock();
     @Value("${benchmark.projector.batch-size:2000}") int batchSize;
 
     public CqrsProjectorService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
     @Scheduled(fixedDelayString = "${benchmark.projector.fixed-delay:1000}")
     public void scheduledDrain() {
-        int n;
-        do { n = drainOnce(batchSize); } while (n > 0);
+        while (true) {
+            // yield immediately if an exclusive op (clear) is waiting, else this loop's
+            // non-fair re-acquire would starve it for the whole backlog
+            if (lock.hasQueuedThreads() || !lock.tryLock()) return;
+            int n;
+            try { n = drainOnce(batchSize); } finally { lock.unlock(); }
+            if (n == 0) return;
+        }
+    }
+
+    /** Run {@code action} with draining paused, so TRUNCATE etc. can't deadlock the projector. */
+    public void runExclusive(Runnable action) {
+        lock.lock();
+        try { action.run(); } finally { lock.unlock(); }
     }
 
     /** Drains up to {@code batch} outbox rows; returns number projected. */
