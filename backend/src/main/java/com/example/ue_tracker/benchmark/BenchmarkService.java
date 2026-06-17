@@ -15,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Measures read latency for both models while a background write load runs concurrently.
@@ -38,7 +39,8 @@ public class BenchmarkService {
     private static final int WRITER_THREADS = 3;
 
     public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long maxMs, int samples) {}
-    public record Result(int durationMs, LatencyStats normal, LatencyStats cqrs) {}
+    public record Result(int durationMs, LatencyStats normal, LatencyStats cqrs,
+                         long eventsWrittenPerModel, long writeRatePerSec) {}
 
     /**
      * Hammer writes from several threads while continuously sampling read latency for each
@@ -48,6 +50,8 @@ public class BenchmarkService {
     public Result run(int durationMs) {
         ExecutorService writers = Executors.newFixedThreadPool(WRITER_THREADS);
         AtomicBoolean running = new AtomicBoolean(true);
+        AtomicLong written = new AtomicLong();   // events written per model
+        long startNanos = System.nanoTime();
         for (int w = 0; w < WRITER_THREADS; w++) {
             writers.submit(() -> {
                 while (running.get()) {
@@ -55,6 +59,7 @@ public class BenchmarkService {
                     try {
                         stores.get(EventModel.NORMAL).copyIn(batch);
                         stores.get(EventModel.CQRS).copyIn(batch);
+                        written.addAndGet(WRITE_BATCH);
                     } catch (RuntimeException ignore) { /* keep loading */ }
                 }
             });
@@ -65,7 +70,11 @@ public class BenchmarkService {
             stores.get(EventModel.CQRS).getLatest(null, 0, 50);
             LatencyStats normal = measureFor(EventModel.NORMAL, durationMs);
             LatencyStats cqrs = measureFor(EventModel.CQRS, durationMs);
-            return new Result(durationMs, normal, cqrs);
+            running.set(false);
+            long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            long events = written.get();
+            long rate = elapsedMs > 0 ? events * 1000L / elapsedMs : 0;
+            return new Result(durationMs, normal, cqrs, events, rate);
         } finally {
             running.set(false);
             writers.shutdown();

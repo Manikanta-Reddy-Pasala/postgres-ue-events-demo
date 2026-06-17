@@ -19,7 +19,10 @@ export type LatencyStats = { avgMs: number; p50Ms: number; p95Ms: number; maxMs:
 
 export const runBenchmark = async (durationMs = 4000) => {
     const response = await axios.post(`${API_BASE_URL}/benchmark`, null, { params: { durationMs }, timeout: 120000 });
-    return response.data as { durationMs: number; normal: LatencyStats; cqrs: LatencyStats };
+    return response.data as {
+        durationMs: number; normal: LatencyStats; cqrs: LatencyStats;
+        eventsWrittenPerModel: number; writeRatePerSec: number;
+    };
 };
 
 export const fetchStats = async (model: Model) => {

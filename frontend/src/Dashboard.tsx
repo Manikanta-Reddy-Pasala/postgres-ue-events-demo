@@ -34,7 +34,10 @@ const Dashboard: React.FC = () => {
     const [genMsg, setGenMsg] = useState<string>('');
     const [backlog, setBacklog] = useState<number>(0);
     const [stats, setStats] = useState<{ uniqueImsis: number; totalEvents: number }>({ uniqueImsis: 0, totalEvents: 0 });
-    const [bench, setBench] = useState<{ durationMs: number; normal: LatencyStats; cqrs: LatencyStats } | null>(null);
+    const [bench, setBench] = useState<{
+        durationMs: number; normal: LatencyStats; cqrs: LatencyStats;
+        eventsWrittenPerModel: number; writeRatePerSec: number;
+    } | null>(null);
     const [benchRunning, setBenchRunning] = useState(false);
 
     // history dialog
@@ -175,6 +178,13 @@ const Dashboard: React.FC = () => {
                         Best run on a large dataset (Generate first).
                     </Typography>
                 </Stack>
+                {bench && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                        Write load during run: <b>{bench.eventsWrittenPerModel.toLocaleString()}</b> events/model
+                        (<b>{(bench.eventsWrittenPerModel * 2).toLocaleString()}</b> total across both) at
+                        ~<b>{bench.writeRatePerSec.toLocaleString()}</b> events/sec/model.
+                    </Typography>
+                )}
                 {bench && (
                     <Table size="small" sx={{ maxWidth: 640 }}>
                         <TableHead>
