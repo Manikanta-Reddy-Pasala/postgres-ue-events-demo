@@ -4,6 +4,7 @@ import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.adapter.UeEventAdapter;
 import com.example.ue_tracker.model.PaginationStrategy;
 import com.example.ue_tracker.pagination.CursorCodec;
+import com.example.ue_tracker.pagination.PageCursor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -37,85 +38,79 @@ public class SeekQuery {
                             int page, String cursorToken, int size) {
         boolean history = imsi != null;
         String tieKey = history ? "id" : "imsi_or_supi";
+        return strategy == PaginationStrategy.OFFSET
+                ? offsetPage(table, imsi, history, tieKey, page, size)
+                : keysetPage(table, imsi, history, tieKey, cursorToken, size);
+    }
 
-        if (strategy == PaginationStrategy.OFFSET) {
-            String sql = "SELECT * FROM " + table + (history ? " WHERE imsi_or_supi = ?" : "")
-                    + " ORDER BY updated_at DESC, " + tieKey + " DESC OFFSET ? LIMIT ?";
-            long[] lastId = {0};
-            List<UeEvent> rows = run(sql, ps -> {
-                int i = 1;
-                if (history) ps.setString(i++, imsi);
-                ps.setInt(i++, page * size);
-                ps.setInt(i, size + 1);
-            }, lastId);
-            boolean hasNext = rows.size() > size;
-            if (hasNext) rows = rows.subList(0, size);
-            long total = estimate(table);
-            int totalPages = (int) Math.max(1, Math.ceil((double) total / size));
-            return new PageResult(rows, total, totalPages, page, "", hasNext);
-        }
-
-        // KEYSET
-        Instant curTs = null; long curId = 0; String curImsi = null; boolean hasCursor = false;
-        String[] parts = codec.decodeLatest(cursorToken); // [micros, tie]
-        if (parts != null) {
-            long micros = Long.parseLong(parts[0]);
-            curTs = Instant.ofEpochSecond(micros / 1_000_000L, (micros % 1_000_000L) * 1_000L);
-            if (history) curId = Long.parseLong(parts[1]); else curImsi = parts[1];
-            hasCursor = true;
-        }
-        StringBuilder sql = new StringBuilder("SELECT * FROM ").append(table).append(" WHERE 1=1");
-        if (history) sql.append(" AND imsi_or_supi = ?");
-        if (hasCursor) sql.append(" AND (updated_at, ").append(tieKey).append(") < (?, ?)");
-        sql.append(" ORDER BY updated_at DESC, ").append(tieKey).append(" DESC LIMIT ?");
-
-        final Instant cts = curTs; final long cid = curId; final String cimsi = curImsi; final boolean hc = hasCursor;
-        long[] lastId = {0};
-        List<UeEvent> rows = run(sql.toString(), ps -> {
+    private PageResult offsetPage(String table, String imsi, boolean history,
+                                  String tieKey, int page, int size) {
+        String sql = "SELECT * FROM " + table + (history ? " WHERE imsi_or_supi = ?" : "")
+                + " ORDER BY updated_at DESC, " + tieKey + " DESC OFFSET ? LIMIT ?";
+        List<Row> rows = run(sql, history, ps -> {
             int i = 1;
             if (history) ps.setString(i++, imsi);
-            if (hc) {
-                ps.setTimestamp(i++, Timestamp.from(cts));
-                if (history) ps.setLong(i++, cid); else ps.setString(i++, cimsi);
+            ps.setInt(i++, page * size);
+            ps.setInt(i, size + 1);
+        });
+        boolean hasNext = rows.size() > size;
+        if (hasNext) rows = rows.subList(0, size);
+        long total = estimate(table);
+        int totalPages = (int) Math.max(1, Math.ceil((double) total / size));
+        return new PageResult(events(rows), total, totalPages, page, "", hasNext);
+    }
+
+    private PageResult keysetPage(String table, String imsi, boolean history,
+                                  String tieKey, String cursorToken, int size) {
+        PageCursor cur = codec.decode(cursorToken);
+        StringBuilder sql = new StringBuilder("SELECT * FROM ").append(table).append(" WHERE 1=1");
+        if (history) sql.append(" AND imsi_or_supi = ?");
+        if (cur != null) sql.append(" AND (updated_at, ").append(tieKey).append(") < (?, ?)");
+        sql.append(" ORDER BY updated_at DESC, ").append(tieKey).append(" DESC LIMIT ?");
+
+        List<Row> rows = run(sql.toString(), history, ps -> {
+            int i = 1;
+            if (history) ps.setString(i++, imsi);
+            if (cur != null) {
+                ps.setTimestamp(i++, Timestamp.from(cur.updatedAt()));
+                if (history) ps.setLong(i++, Long.parseLong(cur.tie())); else ps.setString(i++, cur.tie());
             }
             ps.setInt(i, size + 1);
-        }, lastId);
-
+        });
         boolean hasNext = rows.size() > size;
         if (hasNext) rows = rows.subList(0, size);
         String next = "";
         if (hasNext && !rows.isEmpty()) {
-            UeEvent last = rows.get(rows.size() - 1);
-            String tie = history ? String.valueOf(lastId[0]) : last.getImsiOrSupi();
-            next = codec.encodeLatest(Instant.parse(last.getUpdatedAt()), tie);
+            Row last = rows.get(rows.size() - 1);
+            String tie = history ? String.valueOf(last.id()) : last.event().getImsiOrSupi();
+            next = codec.encode(Instant.parse(last.event().getUpdatedAt()), tie);
         }
-        return new PageResult(rows, 0, 0, 0, next, hasNext);
+        return new PageResult(events(rows), 0, 0, 0, next, hasNext);
     }
+
+    /** A fetched row plus its history id (0 for latest tables, which have no id). */
+    private record Row(UeEvent event, long id) {}
 
     @FunctionalInterface
     private interface PsSetter { void set(PreparedStatement ps) throws SQLException; }
 
-    private List<UeEvent> run(String sql, PsSetter setter, long[] lastId) {
-        List<UeEvent> out = new ArrayList<>();
+    private List<Row> run(String sql, boolean history, PsSetter setter) {
+        List<Row> out = new ArrayList<>();
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             setter.set(ps);
             try (ResultSet rs = ps.executeQuery()) {
-                boolean hasIdCol = hasColumn(rs, "id");
                 while (rs.next()) {
-                    out.add(adapter.fromRow(rs));
-                    if (hasIdCol) lastId[0] = rs.getLong("id");
+                    out.add(new Row(adapter.fromRow(rs), history ? rs.getLong("id") : 0L));
                 }
             }
         } catch (SQLException e) { throw new RuntimeException(e); }
         return out;
     }
 
-    private static boolean hasColumn(ResultSet rs, String name) throws SQLException {
-        var md = rs.getMetaData();
-        for (int i = 1; i <= md.getColumnCount(); i++) {
-            if (name.equalsIgnoreCase(md.getColumnLabel(i))) return true;
-        }
-        return false;
+    private static List<UeEvent> events(List<Row> rows) {
+        List<UeEvent> out = new ArrayList<>(rows.size());
+        for (Row r : rows) out.add(r.event());
+        return out;
     }
 
     private long estimate(String table) {

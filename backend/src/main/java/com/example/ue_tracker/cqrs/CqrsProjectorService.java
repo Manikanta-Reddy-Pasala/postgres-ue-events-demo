@@ -1,6 +1,6 @@
 package com.example.ue_tracker.cqrs;
 
-import com.example.ue_tracker.store.CopySupport;
+import com.example.ue_tracker.store.EventSql;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,8 +43,8 @@ public class CqrsProjectorService {
 
         // Join write_history on the full PK (imsi_or_supi, id) so the lookup uses the
         // partition key -> partition pruning + PK index (NOT a seq scan over all partitions).
-        String cols = CopySupport.COLS;
-        String whCols = prefix(cols, "wh.");
+        String cols = EventSql.COLS;
+        String whCols = EventSql.prefixedCols("wh.");
         String joined =
                 "FROM cqrs_outbox o " +
                 "JOIN cqrs_write_history wh ON wh.imsi_or_supi = o.imsi_or_supi AND wh.id = o.write_history_id " +
@@ -54,23 +54,9 @@ public class CqrsProjectorService {
         jdbc.update("INSERT INTO cqrs_read_latest (" + cols + ") " +
                 "SELECT DISTINCT ON (wh.imsi_or_supi) " + whCols + " " + joined +
                 " ORDER BY wh.imsi_or_supi, wh.updated_at DESC " +
-                "ON CONFLICT (imsi_or_supi) DO UPDATE SET " +
-                "updated_at = EXCLUDED.updated_at, action_taken = EXCLUDED.action_taken, " +
-                "rat = EXCLUDED.rat, rssi = EXCLUDED.rssi, provider_name = EXCLUDED.provider_name, " +
-                "country_name = EXCLUDED.country_name, msisdn = EXCLUDED.msisdn, " +
-                "distance_in_meters = EXCLUDED.distance_in_meters " +
-                "WHERE EXCLUDED.updated_at >= cqrs_read_latest.updated_at");
+                EventSql.onConflictUpdate("cqrs_read_latest"));
         jdbc.update("DELETE FROM cqrs_outbox WHERE seq IN (" + seqs + ")");
         return claimed.size();
-    }
-
-    private static String prefix(String cols, String p) {
-        StringBuilder sb = new StringBuilder();
-        for (String c : cols.split(",")) {
-            if (sb.length() > 0) sb.append(',');
-            sb.append(p).append(c);
-        }
-        return sb.toString();
     }
 
     public long backlog() {

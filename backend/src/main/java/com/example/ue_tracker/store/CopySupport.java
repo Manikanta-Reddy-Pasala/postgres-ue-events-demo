@@ -20,13 +20,6 @@ import java.util.List;
 @Component
 public class CopySupport {
 
-    /** Canonical column order shared by COPY and downstream INSERT...SELECT. */
-    public static final String COLS =
-        "imsi_or_supi,imei,msisdn,guti,tmsi,rssi,action_taken,reject_cause,rat," +
-        "frequency_band,arfcn,tracking_area_code,downlink_band_width,plmn_mcc,plmn_mnc," +
-        "provider_name,mission_id,sensor_id,subsystem_id,trx_command_id,created_at,updated_at," +
-        "country_iso_alpha2,country_name,target,capture_count,timing_advance,distance_in_meters";
-
     private static final String CREATE_STAGING = """
         CREATE TEMP TABLE IF NOT EXISTS staging_events (
             imsi_or_supi text, imei text, msisdn text, guti text, tmsi text, rssi int,
@@ -52,7 +45,7 @@ public class CopySupport {
             }
             long start = System.nanoTime();
             CopyManager cm = conn.unwrap(PGConnection.class).getCopyAPI();
-            cm.copyIn("COPY staging_events (" + COLS + ") FROM STDIN WITH (FORMAT csv)",
+            cm.copyIn("COPY staging_events (" + EventSql.COLS + ") FROM STDIN WITH (FORMAT csv)",
                     new StringReader(toCsv(chunk)));
             long copyMs = (System.nanoTime() - start) / 1_000_000L;
             work.run(conn);
