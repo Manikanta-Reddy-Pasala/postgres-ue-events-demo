@@ -3,6 +3,7 @@ package com.example.ue_tracker.store;
 import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.model.EventModel;
 import com.example.ue_tracker.model.PaginationStrategy;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.sql.Statement;
@@ -13,12 +14,18 @@ public class NormalEventStore implements EventStore {
 
     private final CopySupport copy;
     private final SeekQuery seek;
+    private final JdbcTemplate jdbc;
 
-    NormalEventStore(CopySupport copy, SeekQuery seek) {
-        this.copy = copy; this.seek = seek;
+    NormalEventStore(CopySupport copy, SeekQuery seek, JdbcTemplate jdbc) {
+        this.copy = copy; this.seek = seek; this.jdbc = jdbc;
     }
 
     @Override public EventModel model() { return EventModel.NORMAL; }
+
+    @Override
+    public void clear() {
+        jdbc.execute("TRUNCATE ue_events, ue_events_history");
+    }
 
     @Override
     public long copyIn(List<UeEvent> chunk) {

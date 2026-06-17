@@ -3,6 +3,7 @@ package com.example.ue_tracker.store;
 import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.model.EventModel;
 import com.example.ue_tracker.model.PaginationStrategy;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.sql.Statement;
@@ -13,10 +14,19 @@ public class CqrsEventStore implements EventStore {
 
     private final CopySupport copy;
     private final SeekQuery seek;
+    private final JdbcTemplate jdbc;
 
-    CqrsEventStore(CopySupport copy, SeekQuery seek) { this.copy = copy; this.seek = seek; }
+    CqrsEventStore(CopySupport copy, SeekQuery seek, JdbcTemplate jdbc) {
+        this.copy = copy; this.seek = seek; this.jdbc = jdbc;
+    }
 
     @Override public EventModel model() { return EventModel.CQRS; }
+
+    @Override
+    public void clear() {
+        jdbc.execute("TRUNCATE cqrs_write_latest, cqrs_write_history, " +
+                "cqrs_read_latest, cqrs_read_history, cqrs_outbox");
+    }
 
     @Override
     public long copyIn(List<UeEvent> chunk) {

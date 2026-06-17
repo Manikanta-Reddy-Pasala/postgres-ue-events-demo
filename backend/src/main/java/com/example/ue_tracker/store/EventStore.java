@@ -12,6 +12,9 @@ public interface EventStore {
     /** Bulk-load a chunk; returns DB-side elapsed millis for this chunk. */
     long copyIn(List<UeEvent> chunk);
 
+    /** Remove all rows owned by this model. */
+    void clear();
+
     PageResult getLatest(PaginationStrategy strategy, int page, String cursor, int size);
 
     PageResult getHistory(String imsi, PaginationStrategy strategy, int page, String cursor, int size);

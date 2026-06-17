@@ -39,4 +39,11 @@ class NormalEventStoreTest extends AbstractPostgresTest {
         assertFalse(hist.events().isEmpty());
         assertTrue(hist.events().stream().allMatch(e -> e.getImsiOrSupi().equals(imsi)));
     }
+
+    @Test
+    void clearEmptiesBothTables() {
+        store.copyIn(factory.randomBatch(100));
+        store.clear();
+        assertTrue(store.getLatest(PaginationStrategy.OFFSET, 0, null, 50).events().isEmpty());
+    }
 }

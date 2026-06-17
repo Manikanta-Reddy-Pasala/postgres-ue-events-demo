@@ -1,9 +1,16 @@
 #!/bin/bash
+# Single script to run the whole stack (postgres + backend + frontend).
+#   ./run.sh         build + start everything, wait until ready
+#   ./run.sh down    stop and remove containers + data volume
+#   ./run.sh logs    tail logs
+set -e
 
-# Create docker-compose.yml
-cat << 'EOF' > docker-compose.yml
-version: '3.8'
+cd "$(dirname "$0")"
 
+# docker compose v2 with fallback to v1
+DC="docker compose"; command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1 && DC="docker-compose"
+
+cat > docker-compose.yml <<'EOF'
 services:
   postgres:
     image: postgres:16
@@ -48,12 +55,23 @@ volumes:
   postgres_data:
 EOF
 
-echo "Generated docker-compose.yml"
-echo "Starting application with Docker Compose..."
-docker-compose up --build -d
+case "${1:-up}" in
+  down) $DC down -v; echo "Stopped and removed."; exit 0 ;;
+  logs) $DC logs -f; exit 0 ;;
+esac
 
-echo "Application is starting!"
-echo "Backend API will be available at http://localhost:8080"
-echo "Frontend UI will be available at http://localhost:3000"
-echo "To view logs, run: docker-compose logs -f"
-echo "To stop, run: docker-compose down"
+echo "Building and starting..."
+$DC up --build -d
+
+echo -n "Waiting for backend (http://localhost:8080) "
+for i in $(seq 1 60); do
+  code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/projection/status 2>/dev/null || echo 000)
+  [ "$code" = "200" ] && { echo " ready."; break; }
+  echo -n "."; sleep 2
+done
+
+echo
+echo "UI:      http://localhost:3000   (Generate / Clear, model + strategy toggles, query-time)"
+echo "API:     http://localhost:8080/api"
+echo "Logs:    ./run.sh logs"
+echo "Stop:    ./run.sh down"

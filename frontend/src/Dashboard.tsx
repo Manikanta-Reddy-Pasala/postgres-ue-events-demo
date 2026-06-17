@@ -6,7 +6,7 @@ import {
     TextField, Chip, Stack
 } from '@mui/material';
 import {
-    fetchLatest, fetchHistory, generateData, fetchProjectionStatus, Model, Strategy
+    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, Model, Strategy
 } from './api';
 import { com } from './proto';
 
@@ -76,6 +76,17 @@ const Dashboard: React.FC = () => {
         } catch (e) { setGenMsg('Generation failed (see console)'); console.error(e); }
     };
 
+    const onClear = async () => {
+        if (!window.confirm('Clear ALL data in both models (Normal + CQRS)?')) return;
+        setGenMsg('Clearing…');
+        try {
+            await clearData();
+            setGenMsg('Cleared all data (both models)');
+            setPage(1); setCursorStack([]); setNextCursor(''); setHasNext(false);
+            await loadLatest(1, null);
+        } catch (e) { setGenMsg('Clear failed (see console)'); console.error(e); }
+    };
+
     const onOffsetPage = (_: unknown, value: number) => { setPage(value); loadLatest(value, null); };
     const onKeysetNext = () => {
         setCursorStack(s => [...s, nextCursor]);
@@ -130,6 +141,7 @@ const Dashboard: React.FC = () => {
                 <TextField size="small" type="number" label="Record count" value={count}
                     onChange={e => setCount(parseInt(e.target.value || '0', 10))} sx={{ width: 180 }} />
                 <Button variant="contained" onClick={onGenerate}>Generate Data</Button>
+                <Button variant="outlined" color="error" onClick={onClear}>Clear Data</Button>
                 <Typography variant="body2">{genMsg}</Typography>
             </Stack>
 

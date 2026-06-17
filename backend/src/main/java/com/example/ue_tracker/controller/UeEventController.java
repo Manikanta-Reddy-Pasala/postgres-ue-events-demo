@@ -34,6 +34,12 @@ public class UeEventController {
         return Map.of("count", r.count(), "normalMs", r.normalMs(), "cqrsWriteMs", r.cqrsWriteMs());
     }
 
+    @PostMapping("/clear")
+    public Map<String, Object> clear() {
+        stores.values().forEach(EventStore::clear);
+        return Map.of("cleared", true);
+    }
+
     @GetMapping("/projection/status")
     public Map<String, Object> projectionStatus() {
         return Map.of("outboxBacklog", projector.backlog());

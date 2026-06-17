@@ -11,6 +11,11 @@ export const generateData = async (count: number) => {
     return response.data as { count: number; normalMs: number; cqrsWriteMs: number };
 };
 
+export const clearData = async () => {
+    const response = await axios.post(`${API_BASE_URL}/clear`);
+    return response.data as { cleared: boolean };
+};
+
 export const fetchProjectionStatus = async () => {
     const response = await axios.get(`${API_BASE_URL}/projection/status`);
     return response.data as { outboxBacklog: number };
