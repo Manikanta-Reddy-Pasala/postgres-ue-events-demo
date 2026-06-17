@@ -33,22 +33,27 @@ public class CqrsProjectorService {
     @Transactional
     public int drainOnce(int batch) {
         List<Map<String, Object>> claimed = jdbc.queryForList(
-                "SELECT seq, write_history_id FROM cqrs_outbox ORDER BY seq " +
+                "SELECT seq FROM cqrs_outbox ORDER BY seq " +
                 "FOR UPDATE SKIP LOCKED LIMIT ?", batch);
         if (claimed.isEmpty()) return 0;
 
-        // values are DB-generated bigints, not user input -> safe to inline
-        String ids = claimed.stream().map(r -> String.valueOf(r.get("write_history_id")))
-                .collect(Collectors.joining(","));
+        // seqs are DB-generated bigints, not user input -> safe to inline
         String seqs = claimed.stream().map(r -> String.valueOf(r.get("seq")))
                 .collect(Collectors.joining(","));
 
+        // Join write_history on the full PK (imsi_or_supi, id) so the lookup uses the
+        // partition key -> partition pruning + PK index (NOT a seq scan over all partitions).
         String cols = CopySupport.COLS;
-        jdbc.update("INSERT INTO cqrs_read_history (" + cols + ") " +
-                "SELECT " + cols + " FROM cqrs_write_history WHERE id IN (" + ids + ")");
+        String whCols = prefix(cols, "wh.");
+        String joined =
+                "FROM cqrs_outbox o " +
+                "JOIN cqrs_write_history wh ON wh.imsi_or_supi = o.imsi_or_supi AND wh.id = o.write_history_id " +
+                "WHERE o.seq IN (" + seqs + ")";
+
+        jdbc.update("INSERT INTO cqrs_read_history (" + cols + ") SELECT " + whCols + " " + joined);
         jdbc.update("INSERT INTO cqrs_read_latest (" + cols + ") " +
-                "SELECT DISTINCT ON (imsi_or_supi) " + cols + " FROM cqrs_write_history " +
-                "WHERE id IN (" + ids + ") ORDER BY imsi_or_supi, updated_at DESC " +
+                "SELECT DISTINCT ON (wh.imsi_or_supi) " + whCols + " " + joined +
+                " ORDER BY wh.imsi_or_supi, wh.updated_at DESC " +
                 "ON CONFLICT (imsi_or_supi) DO UPDATE SET " +
                 "updated_at = EXCLUDED.updated_at, action_taken = EXCLUDED.action_taken, " +
                 "rat = EXCLUDED.rat, rssi = EXCLUDED.rssi, provider_name = EXCLUDED.provider_name, " +
@@ -57,6 +62,15 @@ public class CqrsProjectorService {
                 "WHERE EXCLUDED.updated_at >= cqrs_read_latest.updated_at");
         jdbc.update("DELETE FROM cqrs_outbox WHERE seq IN (" + seqs + ")");
         return claimed.size();
+    }
+
+    private static String prefix(String cols, String p) {
+        StringBuilder sb = new StringBuilder();
+        for (String c : cols.split(",")) {
+            if (sb.length() > 0) sb.append(',');
+            sb.append(p).append(c);
+        }
+        return sb.toString();
     }
 
     public long backlog() {
