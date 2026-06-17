@@ -12,6 +12,7 @@ DC="docker compose"; command -v docker-compose >/dev/null 2>&1 && ! docker compo
 
 cat > docker-compose.yml <<'EOF'
 services:
+  # PRIMARY db: NORMAL tables, CQRS write side, outbox (takes the write load)
   postgres:
     image: postgres:16
     environment:
@@ -22,6 +23,49 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    shm_size: 256mb
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "effective_cache_size=1536MB"
+      - "-c"
+      - "max_wal_size=2GB"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # READ db: CQRS read tables only (projector writes here; CQRS reads isolated from write load)
+  postgres-read:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: uetracker
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_read_data:/var/lib/postgresql/data
+    shm_size: 256mb
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "effective_cache_size=1536MB"
+      - "-c"
+      - "max_wal_size=2GB"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -37,10 +81,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-read:
+        condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/uetracker?reWriteBatchedInserts=true
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
+      - APP_READ_DATASOURCE_URL=jdbc:postgresql://postgres-read:5432/uetracker?reWriteBatchedInserts=true
+      - APP_READ_DATASOURCE_USERNAME=postgres
+      - APP_READ_DATASOURCE_PASSWORD=postgres
 
   frontend:
     build:
@@ -53,6 +102,7 @@ services:
 
 volumes:
   postgres_data:
+  postgres_read_data:
 EOF
 
 case "${1:-up}" in

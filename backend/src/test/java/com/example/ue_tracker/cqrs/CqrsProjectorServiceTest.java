@@ -31,7 +31,8 @@ class CqrsProjectorServiceTest extends AbstractPostgresTest {
         }
         assertEquals(250, drained);
         assertEquals(0L, jdbc.queryForObject("SELECT count(*) FROM cqrs_outbox", Long.class));
-        assertEquals(250L, jdbc.queryForObject("SELECT count(*) FROM cqrs_read_history", Long.class));
-        assertTrue(jdbc.queryForObject("SELECT count(*) FROM cqrs_read_latest", Long.class) > 0);
+        // read tables live on the separate read db
+        assertEquals(250L, readJdbcTemplate.queryForObject("SELECT count(*) FROM cqrs_read_history", Long.class));
+        assertTrue(readJdbcTemplate.queryForObject("SELECT count(*) FROM cqrs_read_latest", Long.class) > 0);
     }
 }

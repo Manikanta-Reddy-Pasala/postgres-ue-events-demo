@@ -2,7 +2,6 @@ package com.example.ue_tracker.store;
 
 import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.adapter.UeEventAdapter;
-import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -21,13 +20,12 @@ import java.util.List;
  * Counts are exact {@code count(*)} with the same predicate — cheap here because the latest
  * table is bounded by IMSI cardinality and history is always IMSI-filtered.
  */
-@Component
 public class EventQuery {
 
     private final DataSource ds;
     private final UeEventAdapter adapter;
 
-    EventQuery(DataSource ds, UeEventAdapter adapter) {
+    public EventQuery(DataSource ds, UeEventAdapter adapter) {
         this.ds = ds; this.adapter = adapter;
     }
 

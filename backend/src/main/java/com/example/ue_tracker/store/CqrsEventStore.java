@@ -2,35 +2,45 @@ package com.example.ue_tracker.store;
 
 import com.example.ue.proto.UeEvent;
 import com.example.ue_tracker.model.EventModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.sql.Statement;
 import java.util.List;
 
+/**
+ * Write side (cqrs_write_*, outbox) lives on the PRIMARY db; read side (cqrs_read_*) lives on a
+ * SEPARATE read db. Writes go to primary; reads come from the read db (isolated from the write load).
+ */
 @Component
 public class CqrsEventStore implements EventStore {
 
-    private final CopySupport copy;
-    private final EventQuery query;
-    private final JdbcTemplate jdbc;
+    private final CopySupport copy;                 // primary datasource
+    private final EventQuery readQuery;             // read datasource
+    private final JdbcTemplate primaryJdbc;
+    private final JdbcTemplate readJdbc;
 
-    CqrsEventStore(CopySupport copy, EventQuery query, JdbcTemplate jdbc) {
-        this.copy = copy; this.query = query; this.jdbc = jdbc;
+    CqrsEventStore(CopySupport copy,
+                   @Qualifier("readEventQuery") EventQuery readQuery,
+                   JdbcTemplate primaryJdbc,
+                   @Qualifier("readJdbcTemplate") JdbcTemplate readJdbc) {
+        this.copy = copy; this.readQuery = readQuery;
+        this.primaryJdbc = primaryJdbc; this.readJdbc = readJdbc;
     }
 
     @Override public EventModel model() { return EventModel.CQRS; }
 
     @Override
     public void clear() {
-        jdbc.execute("TRUNCATE cqrs_write_latest, cqrs_write_history, " +
-                "cqrs_read_latest, cqrs_read_history, cqrs_outbox");
+        primaryJdbc.execute("TRUNCATE cqrs_write_latest, cqrs_write_history, cqrs_outbox");
+        readJdbc.execute("TRUNCATE cqrs_read_latest, cqrs_read_history");
     }
 
     @Override
     public Stats stats() {
-        Long uniq = jdbc.queryForObject("SELECT count(*) FROM cqrs_read_latest", Long.class);
-        Long tot = jdbc.queryForObject("SELECT count(*) FROM cqrs_read_history", Long.class);
+        Long uniq = readJdbc.queryForObject("SELECT count(*) FROM cqrs_read_latest", Long.class);
+        Long tot = readJdbc.queryForObject("SELECT count(*) FROM cqrs_read_history", Long.class);
         return new Stats(uniq == null ? 0 : uniq, tot == null ? 0 : tot);
     }
 
@@ -55,11 +65,11 @@ public class CqrsEventStore implements EventStore {
 
     @Override
     public PageResult getLatest(String filter, int page, int size) {
-        return query.page("cqrs_read_latest", null, filter, page, size);
+        return readQuery.page("cqrs_read_latest", null, filter, page, size);
     }
 
     @Override
     public PageResult getHistory(String imsi, int page, int size) {
-        return query.page("cqrs_read_history", imsi, null, page, size);
+        return readQuery.page("cqrs_read_history", imsi, null, page, size);
     }
 }

@@ -23,7 +23,8 @@ class CqrsEventStoreTest extends AbstractPostgresTest {
 
         Long writeHist = jdbc.queryForObject("SELECT count(*) FROM cqrs_write_history", Long.class);
         Long outbox = jdbc.queryForObject("SELECT count(*) FROM cqrs_outbox", Long.class);
-        Long readHist = jdbc.queryForObject("SELECT count(*) FROM cqrs_read_history", Long.class);
+        // read tables live on the separate read db; projector hasn't run
+        Long readHist = readJdbcTemplate.queryForObject("SELECT count(*) FROM cqrs_read_history", Long.class);
 
         assertEquals(300L, writeHist);
         assertEquals(300L, outbox);
