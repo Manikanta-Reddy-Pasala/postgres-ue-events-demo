@@ -39,6 +39,12 @@ public class UeEventController {
         return Map.of("cleared", true);
     }
 
+    @GetMapping("/stats")
+    public Map<String, Object> stats(@RequestParam EventModel model) {
+        EventStore.Stats s = stores.get(model).stats();
+        return Map.of("uniqueImsis", s.uniqueImsis(), "totalEvents", s.totalEvents());
+    }
+
     @GetMapping("/projection/status")
     public Map<String, Object> projectionStatus() {
         return Map.of("outboxBacklog", projector.backlog());

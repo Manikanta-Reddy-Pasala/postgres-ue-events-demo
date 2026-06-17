@@ -6,7 +6,14 @@ import com.example.ue_tracker.model.EventModel;
 import java.util.List;
 
 public interface EventStore {
+
+    /** Row counts for this model: distinct UEs (latest) and total events (history). */
+    record Stats(long uniqueImsis, long totalEvents) {}
+
     EventModel model();
+
+    /** Distinct-IMSI count (latest table) and total event count (history table). */
+    Stats stats();
 
     /** Bulk-load a chunk; returns DB-side elapsed millis for this chunk. */
     long copyIn(List<UeEvent> chunk);

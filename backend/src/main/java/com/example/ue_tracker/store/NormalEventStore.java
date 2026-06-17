@@ -27,6 +27,13 @@ public class NormalEventStore implements EventStore {
     }
 
     @Override
+    public Stats stats() {
+        Long uniq = jdbc.queryForObject("SELECT count(*) FROM ue_events", Long.class);
+        Long tot = jdbc.queryForObject("SELECT count(*) FROM ue_events_history", Long.class);
+        return new Stats(uniq == null ? 0 : uniq, tot == null ? 0 : tot);
+    }
+
+    @Override
     public long copyIn(List<UeEvent> chunk) {
         return copy.withStaging(chunk, conn -> {
             try (Statement st = conn.createStatement()) {

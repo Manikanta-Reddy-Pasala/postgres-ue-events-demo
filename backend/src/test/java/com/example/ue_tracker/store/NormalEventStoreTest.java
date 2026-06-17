@@ -45,6 +45,14 @@ class NormalEventStoreTest extends AbstractPostgresTest {
     }
 
     @Test
+    void statsReportsUniqueImsisAndTotalEvents() {
+        store.copyIn(factory.randomBatch(500));
+        EventStore.Stats s = store.stats();
+        assertEquals(500, s.totalEvents());
+        assertTrue(s.uniqueImsis() > 0 && s.uniqueImsis() <= 500);
+    }
+
+    @Test
     void clearEmptiesBothTables() {
         store.copyIn(factory.randomBatch(100));
         store.clear();

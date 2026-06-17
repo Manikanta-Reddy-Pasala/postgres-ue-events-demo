@@ -15,6 +15,11 @@ export const clearData = async () => {
     return response.data as { cleared: boolean };
 };
 
+export const fetchStats = async (model: Model) => {
+    const response = await axios.get(`${API_BASE_URL}/stats`, { params: { model } });
+    return response.data as { uniqueImsis: number; totalEvents: number };
+};
+
 export const fetchProjectionStatus = async () => {
     const response = await axios.get(`${API_BASE_URL}/projection/status`);
     return response.data as { outboxBacklog: number };

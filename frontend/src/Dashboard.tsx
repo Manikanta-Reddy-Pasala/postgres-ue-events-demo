@@ -6,7 +6,7 @@ import {
     TextField, Chip, Stack
 } from '@mui/material';
 import {
-    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, Model
+    fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, fetchStats, Model
 } from './api';
 import { com } from './proto';
 
@@ -32,6 +32,7 @@ const Dashboard: React.FC = () => {
     const [count, setCount] = useState<number>(10000);
     const [genMsg, setGenMsg] = useState<string>('');
     const [backlog, setBacklog] = useState<number>(0);
+    const [stats, setStats] = useState<{ uniqueImsis: number; totalEvents: number }>({ uniqueImsis: 0, totalEvents: 0 });
 
     // history dialog
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -48,6 +49,7 @@ const Dashboard: React.FC = () => {
             setQueryMs(Number(r.queryTimeMs || 0));
             setTotalPages(r.totalPages || 1);
             setTotalElements(Number(r.totalElements || 0));
+            try { setStats(await fetchStats(model)); } catch { /* ignore */ }
         } catch (e) { console.error(e); } finally { setLoading(false); }
     }, [model]);
 
@@ -111,6 +113,10 @@ const Dashboard: React.FC = () => {
     return (
         <Box sx={{ p: 4 }}>
             <Typography variant="h4" gutterBottom>UE Events — Pagination Benchmark</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                The table lists the <b>latest event per IMSI</b> (one row per UE), so it shows unique IMSIs — not the
+                total events generated. Every event is kept in history; click <b>History</b> on a row to page through them.
+            </Typography>
 
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
                 <ToggleButtonGroup size="small" exclusive value={model}
@@ -120,7 +126,10 @@ const Dashboard: React.FC = () => {
                 </ToggleButtonGroup>
 
                 <Chip color="info" label={`Latest query: ${queryMs} ms`} />
-                <Chip variant="outlined" label={`${totalElements.toLocaleString()} rows · ${totalPages} pages`} />
+                <Chip color="success" variant="outlined"
+                    label={`${stats.totalEvents.toLocaleString()} events · ${stats.uniqueImsis.toLocaleString()} unique IMSIs`} />
+                <Chip variant="outlined"
+                    label={`${activeFilter ? 'matches' : 'list'}: ${totalElements.toLocaleString()} IMSIs · ${totalPages} pages`} />
                 {model === 'CQRS' && <Chip color="warning" label={`Projection backlog: ${backlog.toLocaleString()}`} />}
                 <Button variant="outlined" size="small" onClick={() => loadLatest(page, activeFilter)}>Refresh</Button>
             </Stack>
