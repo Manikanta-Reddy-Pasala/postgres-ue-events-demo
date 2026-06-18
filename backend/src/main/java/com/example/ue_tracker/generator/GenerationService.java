@@ -41,7 +41,10 @@ public class GenerationService {
 
     public Result generate(int uniqueImsis) {
         int nThreads = Math.max(1, Math.min(threads, uniqueImsis));
-        Instant base = Instant.now().minusSeconds((long) uniqueImsis * MAX_EVENTS / 1000 + 1);
+        // Space events SECONDS apart (not ms) so an IMSI's history shows visibly distinct
+        // updated_at values — toLocaleString in the UI only renders to second resolution, so
+        // ms-spaced events all collapsed onto the same displayed timestamp.
+        Instant base = Instant.now().minusSeconds((long) uniqueImsis * MAX_EVENTS + 1);
 
         AtomicLong total = new AtomicLong(), normalMs = new AtomicLong(), cqrsMs = new AtomicLong();
         ExecutorService pool = Executors.newFixedThreadPool(nThreads);
@@ -68,7 +71,7 @@ public class GenerationService {
             String imsi = factory.imsiAt(k);
             int events = MIN_EVENTS + ThreadLocalRandom.current().nextInt(MAX_EVENTS - MIN_EVENTS + 1);
             for (int j = 0; j < events; j++) {
-                buf.add(factory.eventFor(imsi, base.plusMillis(k * MAX_EVENTS + j)));
+                buf.add(factory.eventFor(imsi, base.plusSeconds(k * MAX_EVENTS + j)));
                 if (buf.size() >= chunkSize) flush(buf, normalMs, cqrsMs, total);
             }
         }

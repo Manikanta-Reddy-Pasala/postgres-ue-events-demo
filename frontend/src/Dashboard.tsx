@@ -15,6 +15,14 @@ type UeEvent = com.example.ue.IUeEvent;
 
 const PAGE_SIZE = 50;
 
+// Show milliseconds — toLocaleString() alone renders only to seconds, so sub-second
+// events (live writes, closely-spaced history) all look like the same timestamp.
+const fmtTs = (s?: string | null) => {
+    const d = new Date(s || '');
+    if (isNaN(d.getTime())) return '';
+    return `${d.toLocaleString()}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+};
+
 const Dashboard: React.FC = () => {
     const [model, setModel] = useState<Model>('NORMAL');
 
@@ -248,7 +256,7 @@ const Dashboard: React.FC = () => {
                                     <TableCell>{event.providerName}</TableCell>
                                     <TableCell>{event.countryName}</TableCell>
                                     <TableCell>{event.rssi}</TableCell>
-                                    <TableCell>{new Date(event.updatedAt || '').toLocaleString()}</TableCell>
+                                    <TableCell>{fmtTs(event.updatedAt)}</TableCell>
                                     <TableCell>
                                         <Button variant="contained" size="small"
                                             onClick={() => openHistory(event.imsiOrSupi)}>History</Button>
@@ -290,7 +298,7 @@ const Dashboard: React.FC = () => {
                                             <TableCell>{event.providerName}</TableCell>
                                             <TableCell>{event.rssi}</TableCell>
                                             <TableCell>{event.distanceInMeters}</TableCell>
-                                            <TableCell>{new Date(event.updatedAt || '').toLocaleString()}</TableCell>
+                                            <TableCell>{fmtTs(event.updatedAt)}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
