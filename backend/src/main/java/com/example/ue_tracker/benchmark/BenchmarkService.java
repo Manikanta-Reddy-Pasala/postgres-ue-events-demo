@@ -21,24 +21,24 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 
 /**
- * Measures read latency for both models under a background write load, plus how many writes
- * land on the table each model READS during its sampling window:
+ * Measures LATEST-table read latency for both models under a background write load — the table
+ * where the upsert-latest insert pattern actually contends:
  * <ul>
- *   <li>NORMAL reads {@code ue_events_history} — written directly by the load writers, so its
- *       read-table write rate = the load rate.</li>
- *   <li>CQRS reads {@code cqrs_read_history} — written only by the projector (load writers hit
- *       the separate write tables + outbox), so its read-table write rate = projector throughput
- *       (≈0 at steady state).</li>
+ *   <li>NORMAL reads {@code ue_events} — every event UPSERTs this row in place, so the table the
+ *       dashboard reads is the same one the full write load churns (dead tuples, index bloat on the
+ *       seek index, vacuum pressure). Tail latency (p99) is where that churn shows up.</li>
+ *   <li>CQRS reads {@code cqrs_read_latest} — updated only by the projector, per-IMSI deduped, so
+ *       the read-side latest table stays calm regardless of write rate.</li>
  * </ul>
- * Counters are in-memory (load writer + projector) so measuring them adds no DB cost.
+ * The sampler reads the first latest page (seek, LIMIT 50) repeatedly while {@value #WRITER_THREADS}
+ * writer threads/model hammer the write path — concurrent read under write. Counters are in-memory
+ * (load writer + projector) so measuring the write rate adds no DB cost.
  */
 @Service
 public class BenchmarkService {
 
     private static final int WRITE_BATCH = 2000;
     private static final int WRITER_THREADS = 3;
-    // a base IMSI the load reuses heavily -> its history grows on both sides; we time reads of it
-    private static final String HOT_IMSI = "424021478673415";
 
     private final EventFactory factory;
     private final CqrsProjectorService projector;
@@ -57,13 +57,16 @@ public class BenchmarkService {
         storeList.forEach(s -> stores.put(s.model(), s));
     }
 
-    /** Count-free page fetch (index seek, LIMIT 50) so latency reflects contention, not count(*) size. */
-    private void readPage(JdbcTemplate jdbc, String table) {
+    /**
+     * Count-free first-page read of the LATEST table (seek on idx_..._seek, LIMIT 50) — the exact
+     * query the dashboard's default view runs, and the one that contends with the upsert churn.
+     */
+    private void readLatestPage(JdbcTemplate jdbc, String table) {
         jdbc.queryForList("SELECT * FROM " + table +
-                " WHERE imsi_or_supi = ? ORDER BY updated_at DESC, id DESC LIMIT 50", HOT_IMSI);
+                " ORDER BY updated_at DESC, imsi_or_supi DESC LIMIT 50");
     }
 
-    public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long maxMs, int samples) {}
+    public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long p99Ms, long maxMs, int samples) {}
     /** Writes that landed on the table this model reads, during its window. */
     public record WriteStats(long writesToReadTable, long writesPerSec) {}
     public record Result(int durationMs,
@@ -82,10 +85,10 @@ public class BenchmarkService {
         }
         try {
             // warm both paths so first-sample JIT/plan cost isn't attributed unfairly
-            readPage(primaryJdbc, "ue_events_history");
-            readPage(readJdbc, "cqrs_read_history");
-            Sampled normal = measureFor(primaryJdbc, "ue_events_history", normalLoadEvents::get, durationMs);
-            Sampled cqrs = measureFor(readJdbc, "cqrs_read_history", projector::projectedRows, durationMs);
+            readLatestPage(primaryJdbc, "ue_events");
+            readLatestPage(readJdbc, "cqrs_read_latest");
+            Sampled normal = measureFor(primaryJdbc, "ue_events", normalLoadEvents::get, durationMs);
+            Sampled cqrs = measureFor(readJdbc, "cqrs_read_latest", projector::projectedRows, durationMs);
             return new Result(durationMs, normal.read(), cqrs.read(), normal.write(), cqrs.write());
         } finally {
             running.set(false);
@@ -116,7 +119,7 @@ public class BenchmarkService {
         long end = start + durationMs * 1_000_000L;
         while (System.nanoTime() < end) {
             long t = System.nanoTime();
-            readPage(jdbc, readTable);   // count-free page read of the table the write counter tracks
+            readLatestPage(jdbc, readTable);   // first latest page; write counter tracks churn on this table
             samples.add((System.nanoTime() - t) / 1_000_000L);
         }
         long wallMs = (System.nanoTime() - start) / 1_000_000L;
@@ -125,9 +128,9 @@ public class BenchmarkService {
 
         long[] ms = samples.stream().mapToLong(Long::longValue).sorted().toArray();
         LatencyStats latency = ms.length == 0
-                ? new LatencyStats(0, 0, 0, 0, 0)
+                ? new LatencyStats(0, 0, 0, 0, 0, 0)
                 : new LatencyStats(round(Arrays.stream(ms).average().orElse(0)),
-                        pct(ms, 50), pct(ms, 95), ms[ms.length - 1], ms.length);
+                        pct(ms, 50), pct(ms, 95), pct(ms, 99), ms[ms.length - 1], ms.length);
         return new Sampled(latency, new WriteStats(writeDelta, writeRate));
     }
 

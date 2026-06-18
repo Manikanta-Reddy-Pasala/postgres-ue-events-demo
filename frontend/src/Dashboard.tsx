@@ -174,11 +174,13 @@ const Dashboard: React.FC = () => {
                     </Button>
                     {benchRunning && <CircularProgress size={20} />}
                     <Typography variant="body2" color="text.secondary">
-                        Hammers writes (3 threads/model) for ~4s while sampling a count-free history read on each
-                        model's read table. The real signal is <b>writes/s to read table</b>: NORMAL's read table
-                        absorbs the full write load; CQRS's read table sees only the projector (≈0 at steady state).
-                        Read latency stays low for both on a single node (Postgres MVCC reads don't block on writers,
-                        data fits in cache) — latency only diverges under IO saturation / a read-replica split.
+                        Hammers writes (3 threads/model) for ~4s while repeatedly reading the <b>first latest page</b>
+                        on each model's read table — concurrent read under write, on the table the upsert-latest pattern
+                        actually contends. NORMAL reads <code>ue_events</code>: every event UPSERTs a row in place, so
+                        the read table churns (dead tuples, seek-index bloat, vacuum). CQRS reads <code>cqrs_read_latest</code>,
+                        updated only by the deduped projector. Watch <b>p99</b> (tail) and <b>writes/s to read table</b>:
+                        churn shows up in the tail, not the average. At small scale / in cache both can still look close —
+                        the gap widens as data exceeds buffer cache and bloat accumulates.
                     </Typography>
                 </Stack>
                 {bench && (
@@ -189,6 +191,7 @@ const Dashboard: React.FC = () => {
                                 <TableCell align="right">read avg</TableCell>
                                 <TableCell align="right">p50</TableCell>
                                 <TableCell align="right">p95</TableCell>
+                                <TableCell align="right">p99</TableCell>
                                 <TableCell align="right">max</TableCell>
                                 <TableCell align="right">reads</TableCell>
                                 <TableCell align="right">writes/s&nbsp;to&nbsp;read&nbsp;table</TableCell>
@@ -197,20 +200,22 @@ const Dashboard: React.FC = () => {
                         </TableHead>
                         <TableBody>
                             <TableRow>
-                                <TableCell><b>NORMAL</b> — reads ue_events_history (load writes here)</TableCell>
+                                <TableCell><b>NORMAL</b> — reads ue_events latest (load upserts here)</TableCell>
                                 <TableCell align="right">{bench.normalRead.avgMs} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.p50Ms} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.p95Ms} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.p99Ms} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.maxMs} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.samples}</TableCell>
                                 <TableCell align="right">{bench.normalWrite.writesPerSec.toLocaleString()}</TableCell>
                                 <TableCell align="right">{bench.normalWrite.writesToReadTable.toLocaleString()}</TableCell>
                             </TableRow>
                             <TableRow>
-                                <TableCell><b>CQRS</b> — reads cqrs_read_history (projector writes here)</TableCell>
+                                <TableCell><b>CQRS</b> — reads cqrs_read_latest (deduped projector writes here)</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.avgMs} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.p50Ms} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.p95Ms} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.p99Ms} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.maxMs} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.samples}</TableCell>
                                 <TableCell align="right">{bench.cqrsWrite.writesPerSec.toLocaleString()}</TableCell>

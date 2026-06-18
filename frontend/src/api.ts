@@ -15,7 +15,7 @@ export const clearData = async () => {
     return response.data as { cleared: boolean };
 };
 
-export type LatencyStats = { avgMs: number; p50Ms: number; p95Ms: number; maxMs: number; samples: number };
+export type LatencyStats = { avgMs: number; p50Ms: number; p95Ms: number; p99Ms: number; maxMs: number; samples: number };
 export type WriteStats = { writesToReadTable: number; writesPerSec: number };
 
 export const runBenchmark = async (durationMs = 4000) => {
