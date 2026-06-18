@@ -32,19 +32,39 @@ public class EventFactory {
 
     private static final long IMSI_BASE = 424021478600000L;
 
-    public List<UeEvent> randomBatch(int count) {
+    /** Share of under-load writes that create brand-new UEs; the rest update existing ones. */
+    private static final int NEW_IMSI_PCT = 10;
+
+    /**
+     * A batch of "live" events whose IMSIs are drawn mostly from {@code existingImsis} — so the
+     * load <em>updates existing UEs</em>: each event upserts that UE's latest row in place (the
+     * real churn on {@code ue_events}/{@code cqrs_read_latest}) and appends to history, turning the
+     * previous latest into a history row. ~{@value #NEW_IMSI_PCT}% are brand-new UEs (inserts).
+     * Falls back to random new UEs when no pool is given (empty DB). Events are stamped "now",
+     * 1µs apart, so every event becomes the newest for its UE and rows stay distinct.
+     */
+    public List<UeEvent> batchForImsis(List<String> existingImsis, int count) {
         ThreadLocalRandom r = ThreadLocalRandom.current();
-        // Each event gets its own timestamp (1µs apart) so a batch doesn't stamp every row
-        // with one identical updated_at — otherwise an IMSI's history/latest shows N rows all
-        // at the same instant. timestamptz is µs-resolution, so 1µs spacing stays distinct.
+        boolean havePool = existingImsis != null && !existingImsis.isEmpty();
         Instant base = Instant.now();
         List<UeEvent> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            String imsi = BASE_IMSIS[r.nextInt(BASE_IMSIS.length)];
-            if (r.nextInt(10) > 7) imsi = imsi.substring(0, 10) + (10000 + r.nextInt(90000));
+            String imsi = (havePool && r.nextInt(100) >= NEW_IMSI_PCT)
+                    ? existingImsis.get(r.nextInt(existingImsis.size()))   // update an existing UE
+                    : newImsi(r);                                          // occasional brand-new UE
             out.add(build(imsi, base.plusNanos((long) i * 1000L).toString(), r));
         }
         return out;
+    }
+
+    /** Batch of events for brand-new random UEs (no existing pool). */
+    public List<UeEvent> randomBatch(int count) {
+        return batchForImsis(null, count);
+    }
+
+    /** Brand-new UE id, parked well above the generated range so it never collides. */
+    private static String newImsi(ThreadLocalRandom r) {
+        return Long.toString(IMSI_BASE + 1_000_000L + r.nextLong(9_000_000L));
     }
 
     /** Deterministic distinct 15-digit IMSI for index. */

@@ -40,6 +40,7 @@ public class BenchmarkService {
 
     private static final int WRITE_BATCH = 2000;
     private static final int WRITER_THREADS = 3;
+    private static final int IMSI_POOL_SIZE = 5000;   // existing UEs the load churns
 
     private final EventFactory factory;
     private final CqrsProjectorService projector;
@@ -77,12 +78,15 @@ public class BenchmarkService {
     private record Sampled(LatencyStats read, WriteStats write) {}
 
     public Result run(int durationMs) {
+        // Draw a sample of EXISTING UEs so the load updates real generated rows (upsert-in-place
+        // churn on the latest table + history growth), not a separate synthetic IMSI set.
+        List<String> imsiPool = sampleExistingImsis();
         ExecutorService writers = Executors.newFixedThreadPool(WRITER_THREADS * 2);
         AtomicBoolean running = new AtomicBoolean(true);
         AtomicLong normalLoadEvents = new AtomicLong(); // inserts the load makes into ue_events_history
         for (int w = 0; w < WRITER_THREADS; w++) {
-            writers.submit(() -> loadLoop(running, EventModel.NORMAL, normalLoadEvents));
-            writers.submit(() -> loadLoop(running, EventModel.CQRS, null));
+            writers.submit(() -> loadLoop(running, EventModel.NORMAL, normalLoadEvents, imsiPool));
+            writers.submit(() -> loadLoop(running, EventModel.CQRS, null, imsiPool));
         }
         ExecutorService samplers = Executors.newFixedThreadPool(2);
         try {
@@ -114,10 +118,21 @@ public class BenchmarkService {
         }
     }
 
-    private void loadLoop(AtomicBoolean running, EventModel model, AtomicLong counter) {
+    /** Sample existing UE ids from the latest table so the load updates real rows (empty -> []). */
+    private List<String> sampleExistingImsis() {
+        try {
+            return primaryJdbc.queryForList(
+                    "SELECT imsi_or_supi FROM ue_events ORDER BY updated_at DESC LIMIT " + IMSI_POOL_SIZE,
+                    String.class);
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    private void loadLoop(AtomicBoolean running, EventModel model, AtomicLong counter, List<String> pool) {
         EventStore store = stores.get(model);
         while (running.get()) {
-            List<UeEvent> batch = factory.randomBatch(WRITE_BATCH);
+            List<UeEvent> batch = factory.batchForImsis(pool, WRITE_BATCH);
             try {
                 store.copyIn(batch);
                 if (counter != null) counter.addAndGet(WRITE_BATCH);
