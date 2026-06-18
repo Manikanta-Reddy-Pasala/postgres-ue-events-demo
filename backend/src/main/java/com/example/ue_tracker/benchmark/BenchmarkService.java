@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -66,7 +67,7 @@ public class BenchmarkService {
                 " ORDER BY updated_at DESC, imsi_or_supi DESC LIMIT 50");
     }
 
-    public record LatencyStats(double avgMs, long p50Ms, long p95Ms, long p99Ms, long maxMs, int samples) {}
+    public record LatencyStats(double avgMs, double p50Ms, double p95Ms, double p99Ms, double maxMs, int samples) {}
     /** Writes that landed on the table this model reads, during its window. */
     public record WriteStats(long writesToReadTable, long writesPerSec) {}
     public record Result(int durationMs,
@@ -83,14 +84,27 @@ public class BenchmarkService {
             writers.submit(() -> loadLoop(running, EventModel.NORMAL, normalLoadEvents));
             writers.submit(() -> loadLoop(running, EventModel.CQRS, null));
         }
+        ExecutorService samplers = Executors.newFixedThreadPool(2);
         try {
             // warm both paths so first-sample JIT/plan cost isn't attributed unfairly
             readLatestPage(primaryJdbc, "ue_events");
             readLatestPage(readJdbc, "cqrs_read_latest");
-            Sampled normal = measureFor(primaryJdbc, "ue_events", normalLoadEvents::get, durationMs);
-            Sampled cqrs = measureFor(readJdbc, "cqrs_read_latest", projector::projectedRows, durationMs);
+            // Sample both models over the SAME window — sequential sampling would compare each
+            // model against a different slice of write load (and double the wall-clock time).
+            Future<Sampled> nf = samplers.submit(
+                    () -> measureFor(primaryJdbc, "ue_events", normalLoadEvents::get, durationMs));
+            Future<Sampled> cf = samplers.submit(
+                    () -> measureFor(readJdbc, "cqrs_read_latest", projector::projectedRows, durationMs));
+            Sampled normal = nf.get();
+            Sampled cqrs = cf.get();
             return new Result(durationMs, normal.read(), cqrs.read(), normal.write(), cqrs.write());
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw new RuntimeException("benchmark sampling failed", e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("benchmark interrupted", e);
         } finally {
+            samplers.shutdownNow();
             running.set(false);
             writers.shutdown();
             try { writers.awaitTermination(15, TimeUnit.SECONDS); } catch (InterruptedException ignore) {
@@ -114,23 +128,24 @@ public class BenchmarkService {
     /** Sample read latency for {@code durationMs}; {@code readTableWrites} counts writes hitting {@code readTable}. */
     private Sampled measureFor(JdbcTemplate jdbc, String readTable, LongSupplier readTableWrites, int durationMs) {
         long writesBefore = readTableWrites.getAsLong();
-        List<Long> samples = new ArrayList<>();
+        List<Long> samples = new ArrayList<>();   // per-read latency in NANOS (sub-ms reads matter)
         long start = System.nanoTime();
         long end = start + durationMs * 1_000_000L;
         while (System.nanoTime() < end) {
             long t = System.nanoTime();
             readLatestPage(jdbc, readTable);   // first latest page; write counter tracks churn on this table
-            samples.add((System.nanoTime() - t) / 1_000_000L);
+            samples.add(System.nanoTime() - t);
         }
         long wallMs = (System.nanoTime() - start) / 1_000_000L;
         long writeDelta = Math.max(0, readTableWrites.getAsLong() - writesBefore);
         long writeRate = wallMs > 0 ? writeDelta * 1000L / wallMs : 0;
 
-        long[] ms = samples.stream().mapToLong(Long::longValue).sorted().toArray();
-        LatencyStats latency = ms.length == 0
+        long[] ns = samples.stream().mapToLong(Long::longValue).sorted().toArray();
+        LatencyStats latency = ns.length == 0
                 ? new LatencyStats(0, 0, 0, 0, 0, 0)
-                : new LatencyStats(round(Arrays.stream(ms).average().orElse(0)),
-                        pct(ms, 50), pct(ms, 95), pct(ms, 99), ms[ms.length - 1], ms.length);
+                : new LatencyStats(toMs(Arrays.stream(ns).average().orElse(0)),
+                        toMs(pct(ns, 50)), toMs(pct(ns, 95)), toMs(pct(ns, 99)),
+                        toMs(ns[ns.length - 1]), ns.length);
         return new Sampled(latency, new WriteStats(writeDelta, writeRate));
     }
 
@@ -139,5 +154,6 @@ public class BenchmarkService {
         return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
     }
 
-    private static double round(double v) { return Math.round(v * 10.0) / 10.0; }
+    /** Nanoseconds → milliseconds, kept to 2 decimals so sub-ms seek reads don't collapse to 0. */
+    private static double toMs(double nanos) { return Math.round(nanos / 1_000_000.0 * 100.0) / 100.0; }
 }

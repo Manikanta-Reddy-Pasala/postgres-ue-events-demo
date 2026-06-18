@@ -34,12 +34,15 @@ public class EventFactory {
 
     public List<UeEvent> randomBatch(int count) {
         ThreadLocalRandom r = ThreadLocalRandom.current();
-        String now = Instant.now().toString();
+        // Each event gets its own timestamp (1µs apart) so a batch doesn't stamp every row
+        // with one identical updated_at — otherwise an IMSI's history/latest shows N rows all
+        // at the same instant. timestamptz is µs-resolution, so 1µs spacing stays distinct.
+        Instant base = Instant.now();
         List<UeEvent> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             String imsi = BASE_IMSIS[r.nextInt(BASE_IMSIS.length)];
             if (r.nextInt(10) > 7) imsi = imsi.substring(0, 10) + (10000 + r.nextInt(90000));
-            out.add(build(imsi, now, r));
+            out.add(build(imsi, base.plusNanos((long) i * 1000L).toString(), r));
         }
         return out;
     }

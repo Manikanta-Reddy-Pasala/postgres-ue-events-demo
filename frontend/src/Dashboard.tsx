@@ -201,22 +201,22 @@ const Dashboard: React.FC = () => {
                         <TableBody>
                             <TableRow>
                                 <TableCell><b>NORMAL</b> — reads ue_events latest (load upserts here)</TableCell>
-                                <TableCell align="right">{bench.normalRead.avgMs} ms</TableCell>
-                                <TableCell align="right">{bench.normalRead.p50Ms} ms</TableCell>
-                                <TableCell align="right">{bench.normalRead.p95Ms} ms</TableCell>
-                                <TableCell align="right">{bench.normalRead.p99Ms} ms</TableCell>
-                                <TableCell align="right">{bench.normalRead.maxMs} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.avgMs.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.p50Ms.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.p95Ms.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.p99Ms.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.normalRead.maxMs.toFixed(2)} ms</TableCell>
                                 <TableCell align="right">{bench.normalRead.samples}</TableCell>
                                 <TableCell align="right">{bench.normalWrite.writesPerSec.toLocaleString()}</TableCell>
                                 <TableCell align="right">{bench.normalWrite.writesToReadTable.toLocaleString()}</TableCell>
                             </TableRow>
                             <TableRow>
                                 <TableCell><b>CQRS</b> — reads cqrs_read_latest (deduped projector writes here)</TableCell>
-                                <TableCell align="right">{bench.cqrsRead.avgMs} ms</TableCell>
-                                <TableCell align="right">{bench.cqrsRead.p50Ms} ms</TableCell>
-                                <TableCell align="right">{bench.cqrsRead.p95Ms} ms</TableCell>
-                                <TableCell align="right">{bench.cqrsRead.p99Ms} ms</TableCell>
-                                <TableCell align="right">{bench.cqrsRead.maxMs} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.avgMs.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.p50Ms.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.p95Ms.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.p99Ms.toFixed(2)} ms</TableCell>
+                                <TableCell align="right">{bench.cqrsRead.maxMs.toFixed(2)} ms</TableCell>
                                 <TableCell align="right">{bench.cqrsRead.samples}</TableCell>
                                 <TableCell align="right">{bench.cqrsWrite.writesPerSec.toLocaleString()}</TableCell>
                                 <TableCell align="right">{bench.cqrsWrite.writesToReadTable.toLocaleString()}</TableCell>
