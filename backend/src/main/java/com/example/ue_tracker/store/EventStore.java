@@ -21,9 +21,9 @@ public interface EventStore {
     /** Remove all rows owned by this model. */
     void clear();
 
-    /** Latest event per IMSI, optionally filtered (IMSI/MSISDN/RAT), OFFSET-paginated. */
-    PageResult getLatest(String filter, int page, int size);
+    /** Latest event per IMSI, optionally filtered (ANDed fields), sorted by updated_at, OFFSET-paginated. */
+    PageResult getLatest(EventQuery.Filters filters, boolean ascending, int page, int size);
 
-    /** Full history for one IMSI, OFFSET-paginated. */
-    PageResult getHistory(String imsi, int page, int size);
+    /** Full history for one IMSI, sorted by updated_at, OFFSET-paginated. */
+    PageResult getHistory(String imsi, boolean ascending, int page, int size);
 }

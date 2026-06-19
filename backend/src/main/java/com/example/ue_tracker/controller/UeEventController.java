@@ -5,6 +5,7 @@ import com.example.ue_tracker.benchmark.BenchmarkService;
 import com.example.ue_tracker.cqrs.CqrsProjectorService;
 import com.example.ue_tracker.generator.GenerationService;
 import com.example.ue_tracker.model.EventModel;
+import com.example.ue_tracker.store.EventQuery;
 import com.example.ue_tracker.store.EventStore;
 import com.example.ue_tracker.store.PageResult;
 import org.springframework.web.bind.annotation.*;
@@ -66,21 +67,37 @@ public class UeEventController {
     @GetMapping(value = "/events/latest", produces = "application/x-protobuf")
     public UeEventPageResponse latest(@RequestParam EventModel model,
                                       @RequestParam(required = false) String q,
+                                      @RequestParam(required = false) String imsi,
+                                      @RequestParam(required = false) String msisdn,
+                                      @RequestParam(required = false) String rat,
+                                      @RequestParam(required = false) String provider,
+                                      @RequestParam(required = false) String country,
+                                      @RequestParam(defaultValue = "desc") String sort,
                                       @RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "50") int size) {
+        // `q` (legacy single box) maps onto IMSI; per-field params AND together with it.
+        EventQuery.Filters filters = new EventQuery.Filters(
+                firstNonBlank(imsi, q), msisdn, rat, provider, country);
         long start = System.nanoTime();
-        PageResult r = stores.get(model).getLatest(q, page, size);
+        PageResult r = stores.get(model).getLatest(filters, isAscending(sort), page, size);
         return toProto(r, System.nanoTime() - start);
     }
 
     @GetMapping(value = "/events/{imsi}/history", produces = "application/x-protobuf")
     public UeEventPageResponse history(@PathVariable String imsi,
                                        @RequestParam EventModel model,
+                                       @RequestParam(defaultValue = "desc") String sort,
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "50") int size) {
         long start = System.nanoTime();
-        PageResult r = stores.get(model).getHistory(imsi, page, size);
+        PageResult r = stores.get(model).getHistory(imsi, isAscending(sort), page, size);
         return toProto(r, System.nanoTime() - start);
+    }
+
+    private static boolean isAscending(String sort) { return "asc".equalsIgnoreCase(sort); }
+
+    private static String firstNonBlank(String a, String b) {
+        return (a != null && !a.isBlank()) ? a : b;
     }
 
     private UeEventPageResponse toProto(PageResult r, long elapsedNanos) {

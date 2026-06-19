@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
     fetchLatest, fetchHistory, generateData, clearData, fetchProjectionStatus, fetchStats,
-    runBenchmark, LatencyStats, WriteStats, Model
+    runBenchmark, LatencyStats, WriteStats, Model, Filters, SortDir
 } from './api';
 import { com } from './proto';
 
@@ -35,9 +35,10 @@ const Dashboard: React.FC = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [totalElements, setTotalElements] = useState(0);
 
-    // single search box: matches IMSI / MSISDN / RAT
-    const [search, setSearch] = useState('');
-    const [activeFilter, setActiveFilter] = useState('');
+    // per-field filters (ANDed server-side) + timestamp sort direction
+    const [draftFilters, setDraftFilters] = useState<Filters>({});
+    const [activeFilters, setActiveFilters] = useState<Filters>({});
+    const [sortDir, setSortDir] = useState<SortDir>('desc');
 
     const [count, setCount] = useState<number>(1000);
     const [genMsg, setGenMsg] = useState<string>('');
@@ -58,11 +59,11 @@ const Dashboard: React.FC = () => {
     const [historyRoundTripMs, setHistoryRoundTripMs] = useState<number>(0);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    const loadLatest = useCallback(async (p: number, filter: string) => {
+    const loadLatest = useCallback(async (p: number, filters: Filters, sort: SortDir) => {
         setLoading(true);
         try {
             const t0 = performance.now();
-            const r = await fetchLatest(model, p - 1, PAGE_SIZE, filter);
+            const r = await fetchLatest(model, p - 1, PAGE_SIZE, filters, sort);
             setRoundTripMs(Math.round(performance.now() - t0));
             setEvents(r.events || []);
             setQueryMs(Number(r.queryTimeMs || 0));
@@ -76,12 +77,12 @@ const Dashboard: React.FC = () => {
         try { setStats(await fetchStats(model)); } catch { /* ignore */ }
     }, [model]);
 
-    // reload when model changes (keep current filter)
+    // reload when model / applied filters / sort change
     useEffect(() => {
         setPage(1);
-        loadLatest(1, activeFilter);
+        loadLatest(1, activeFilters, sortDir);
         loadStats();
-    }, [model, activeFilter, loadLatest, loadStats]);
+    }, [model, activeFilters, sortDir, loadLatest, loadStats]);
 
     // poll projection backlog in CQRS mode
     useEffect(() => {
@@ -98,7 +99,7 @@ const Dashboard: React.FC = () => {
             const r = await generateData(count);
             setGenMsg(`Generated ${r.uniqueImsis.toLocaleString()} IMSIs · ${r.totalEvents.toLocaleString()} events — normal: ${r.normalMs} ms · cqrs-write: ${r.cqrsWriteMs} ms`);
             setPage(1);
-            await loadLatest(1, activeFilter);
+            await loadLatest(1, activeFilters, sortDir);
             loadStats();
         } catch (e) { setGenMsg('Generation failed (see console)'); console.error(e); }
     };
@@ -110,7 +111,7 @@ const Dashboard: React.FC = () => {
             await clearData();
             setGenMsg('Cleared all data (both models)');
             setPage(1);
-            await loadLatest(1, activeFilter);
+            await loadLatest(1, activeFilters, sortDir);
             loadStats();
         } catch (e) { setGenMsg('Clear failed (see console)'); console.error(e); }
     };
@@ -122,17 +123,20 @@ const Dashboard: React.FC = () => {
         } catch (e) { console.error(e); } finally { setBenchRunning(false); }
     };
 
-    const runSearch = () => { setPage(1); setActiveFilter(search); };
-    const clearSearch = () => { setSearch(''); setPage(1); setActiveFilter(''); };
+    const setFilter = (key: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement>) =>
+        setDraftFilters(f => ({ ...f, [key]: e.target.value }));
+    const runSearch = () => { setPage(1); setActiveFilters(draftFilters); };
+    const clearSearch = () => { setDraftFilters({}); setPage(1); setActiveFilters({}); };
+    const hasActiveFilters = Object.values(activeFilters).some(v => v && v.trim());
 
-    const onPage = (_: unknown, value: number) => { setPage(value); loadLatest(value, activeFilter); };
+    const onPage = (_: unknown, value: number) => { setPage(value); loadLatest(value, activeFilters, sortDir); };
 
     const openHistory = async (imsi?: string | null) => {
         if (!imsi) return;
         setSelectedImsi(imsi); setHistoryOpen(true); setHistoryLoading(true);
         try {
             const t0 = performance.now();
-            const r = await fetchHistory(imsi, model, 0, PAGE_SIZE);
+            const r = await fetchHistory(imsi, model, 0, PAGE_SIZE, sortDir);
             setHistoryRoundTripMs(Math.round(performance.now() - t0));
             setHistoryEvents(r.events || []);
             setHistoryMs(Number(r.queryTimeMs || 0));
@@ -167,19 +171,33 @@ const Dashboard: React.FC = () => {
                 <Chip color="success" variant="outlined"
                     label={`${stats.totalEvents.toLocaleString()} events · ${stats.uniqueImsis.toLocaleString()} unique IMSIs`} />
                 <Chip variant="outlined"
-                    label={`${activeFilter ? 'matches' : 'list'}: ${totalElements.toLocaleString()} IMSIs · ${totalPages} pages`} />
+                    label={`${hasActiveFilters ? 'matches' : 'list'}: ${totalElements.toLocaleString()} IMSIs · ${totalPages} pages`} />
                 {model === 'CQRS' && <Chip color="warning" label={`Projection backlog: ${backlog.toLocaleString()}`} />}
-                <Button variant="outlined" size="small" onClick={() => loadLatest(page, activeFilter)}>Refresh</Button>
+                <Button variant="outlined" size="small" onClick={() => loadLatest(page, activeFilters, sortDir)}>Refresh</Button>
             </Stack>
 
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                <TextField size="small" label="Search IMSI / MSISDN / RAT" value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') runSearch(); }} sx={{ width: 320 }} />
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1.5 }}>
+                {(['imsi', 'msisdn', 'rat', 'provider', 'country'] as (keyof Filters)[]).map(k => (
+                    <TextField key={k} size="small" label={k.toUpperCase()} value={draftFilters[k] || ''}
+                        onChange={setFilter(k)}
+                        onKeyDown={e => { if (e.key === 'Enter') runSearch(); }} sx={{ width: 150 }} />
+                ))}
                 <Button variant="contained" onClick={runSearch}>Search</Button>
-                <Button variant="text" onClick={clearSearch} disabled={!activeFilter}>Clear</Button>
-                {activeFilter && <Chip color="secondary" label={`filter: "${activeFilter}"`} onDelete={clearSearch} />}
+                <Button variant="text" onClick={clearSearch} disabled={!hasActiveFilters}>Clear</Button>
+
+                <ToggleButtonGroup size="small" exclusive value={sortDir}
+                    onChange={(_, v) => v && setSortDir(v)} sx={{ ml: 'auto' }}>
+                    <ToggleButton value="desc">Newest first</ToggleButton>
+                    <ToggleButton value="asc">Oldest first</ToggleButton>
+                </ToggleButtonGroup>
             </Stack>
+            {hasActiveFilters && (
+                <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
+                    {(Object.entries(activeFilters) as [keyof Filters, string][])
+                        .filter(([, v]) => v && v.trim())
+                        .map(([k, v]) => <Chip key={k} size="small" color="secondary" label={`${k}: "${v}"`} />)}
+                </Stack>
+            )}
 
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
                 <TextField size="small" type="number" label="Unique IMSIs" value={count}

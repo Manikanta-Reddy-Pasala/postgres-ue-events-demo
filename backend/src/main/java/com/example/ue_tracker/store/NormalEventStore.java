@@ -44,12 +44,12 @@ public class NormalEventStore implements EventStore {
     }
 
     @Override
-    public PageResult getLatest(String filter, int page, int size) {
-        return query.page("ue_events", null, filter, page, size);
+    public PageResult getLatest(EventQuery.Filters filters, boolean ascending, int page, int size) {
+        return query.page("ue_events", null, filters, ascending, page, size);
     }
 
     @Override
-    public PageResult getHistory(String imsi, int page, int size) {
-        return query.page("ue_events_history", imsi, null, page, size);
+    public PageResult getHistory(String imsi, boolean ascending, int page, int size) {
+        return query.page("ue_events_history", imsi, null, ascending, page, size);
     }
 }

@@ -37,21 +37,32 @@ export const fetchProjectionStatus = async () => {
     return response.data as { outboxBacklog: number };
 };
 
+export type SortDir = 'asc' | 'desc';
+
+// Per-field filters for the latest table — present fields AND together server-side.
+export type Filters = { imsi?: string; msisdn?: string; rat?: string; provider?: string; country?: string };
+
+const trimmed = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+
 export const fetchLatest = async (
-    model: Model, page: number, size = 50, filter?: string
+    model: Model, page: number, size = 50, filters: Filters = {}, sort: SortDir = 'desc'
 ) => {
     const response = await axios.get(`${API_BASE_URL}/events/latest`, {
-        params: { model, page, size, q: filter && filter.trim() ? filter.trim() : undefined },
+        params: {
+            model, page, size, sort,
+            imsi: trimmed(filters.imsi), msisdn: trimmed(filters.msisdn), rat: trimmed(filters.rat),
+            provider: trimmed(filters.provider), country: trimmed(filters.country),
+        },
         responseType: 'arraybuffer',
     });
     return com.example.ue.UeEventPageResponse.decode(new Uint8Array(response.data));
 };
 
 export const fetchHistory = async (
-    imsi: string, model: Model, page: number, size = 50
+    imsi: string, model: Model, page: number, size = 50, sort: SortDir = 'desc'
 ) => {
     const response = await axios.get(`${API_BASE_URL}/events/${imsi}/history`, {
-        params: { model, page, size },
+        params: { model, page, size, sort },
         responseType: 'arraybuffer',
     });
     return com.example.ue.UeEventPageResponse.decode(new Uint8Array(response.data));
