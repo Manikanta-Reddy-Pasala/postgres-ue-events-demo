@@ -35,6 +35,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2'
           memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -65,6 +66,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2'
           memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
