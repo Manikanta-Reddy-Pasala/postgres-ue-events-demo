@@ -28,7 +28,8 @@ const Dashboard: React.FC = () => {
 
     const [events, setEvents] = useState<UeEvent[]>([]);
     const [loading, setLoading] = useState(false);
-    const [queryMs, setQueryMs] = useState<number>(0);
+    const [queryMs, setQueryMs] = useState<number>(0);      // server-side DB query time
+    const [roundTripMs, setRoundTripMs] = useState<number>(0); // browser fetch: network + protobuf decode
 
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -54,25 +55,33 @@ const Dashboard: React.FC = () => {
     const [selectedImsi, setSelectedImsi] = useState<string | null>(null);
     const [historyEvents, setHistoryEvents] = useState<UeEvent[]>([]);
     const [historyMs, setHistoryMs] = useState<number>(0);
+    const [historyRoundTripMs, setHistoryRoundTripMs] = useState<number>(0);
     const [historyLoading, setHistoryLoading] = useState(false);
 
     const loadLatest = useCallback(async (p: number, filter: string) => {
         setLoading(true);
         try {
+            const t0 = performance.now();
             const r = await fetchLatest(model, p - 1, PAGE_SIZE, filter);
+            setRoundTripMs(Math.round(performance.now() - t0));
             setEvents(r.events || []);
             setQueryMs(Number(r.queryTimeMs || 0));
             setTotalPages(r.totalPages || 1);
             setTotalElements(Number(r.totalElements || 0));
-            try { setStats(await fetchStats(model)); } catch { /* ignore */ }
         } catch (e) { console.error(e); } finally { setLoading(false); }
+    }, [model]);
+
+    // stats (count(*) over history = expensive) load OUT of band — never blocks the table render
+    const loadStats = useCallback(async () => {
+        try { setStats(await fetchStats(model)); } catch { /* ignore */ }
     }, [model]);
 
     // reload when model changes (keep current filter)
     useEffect(() => {
         setPage(1);
         loadLatest(1, activeFilter);
-    }, [model, activeFilter, loadLatest]);
+        loadStats();
+    }, [model, activeFilter, loadLatest, loadStats]);
 
     // poll projection backlog in CQRS mode
     useEffect(() => {
@@ -90,6 +99,7 @@ const Dashboard: React.FC = () => {
             setGenMsg(`Generated ${r.uniqueImsis.toLocaleString()} IMSIs · ${r.totalEvents.toLocaleString()} events — normal: ${r.normalMs} ms · cqrs-write: ${r.cqrsWriteMs} ms`);
             setPage(1);
             await loadLatest(1, activeFilter);
+            loadStats();
         } catch (e) { setGenMsg('Generation failed (see console)'); console.error(e); }
     };
 
@@ -101,6 +111,7 @@ const Dashboard: React.FC = () => {
             setGenMsg('Cleared all data (both models)');
             setPage(1);
             await loadLatest(1, activeFilter);
+            loadStats();
         } catch (e) { setGenMsg('Clear failed (see console)'); console.error(e); }
     };
 
@@ -120,7 +131,9 @@ const Dashboard: React.FC = () => {
         if (!imsi) return;
         setSelectedImsi(imsi); setHistoryOpen(true); setHistoryLoading(true);
         try {
+            const t0 = performance.now();
             const r = await fetchHistory(imsi, model, 0, PAGE_SIZE);
+            setHistoryRoundTripMs(Math.round(performance.now() - t0));
             setHistoryEvents(r.events || []);
             setHistoryMs(Number(r.queryTimeMs || 0));
         } catch (e) { console.error(e); } finally { setHistoryLoading(false); }
@@ -148,7 +161,9 @@ const Dashboard: React.FC = () => {
                     <ToggleButton value="CQRS">CQRS (Read-Write Sep)</ToggleButton>
                 </ToggleButtonGroup>
 
-                <Chip color="info" label={`Latest query: ${queryMs} ms`} />
+                <Chip color="info"
+                    title="DB = server-side SQL query time only (excludes protobuf encode + network). Round-trip = full browser fetch incl. network + protobuf decode."
+                    label={`Latest — DB: ${queryMs} ms · round-trip: ${roundTripMs} ms`} />
                 <Chip color="success" variant="outlined"
                     label={`${stats.totalEvents.toLocaleString()} events · ${stats.uniqueImsis.toLocaleString()} unique IMSIs`} />
                 <Chip variant="outlined"
@@ -277,7 +292,9 @@ const Dashboard: React.FC = () => {
 
             <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="lg" fullWidth>
                 <DialogTitle>
-                    History — IMSI {selectedImsi} <Chip size="small" color="info" label={`${historyMs} ms`} sx={{ ml: 2 }} />
+                    History — IMSI {selectedImsi} <Chip size="small" color="info"
+                        title="DB = server-side SQL query time only. Round-trip = full browser fetch incl. network + protobuf decode."
+                        label={`DB: ${historyMs} ms · round-trip: ${historyRoundTripMs} ms`} sx={{ ml: 2 }} />
                 </DialogTitle>
                 <DialogContent>
                     {historyLoading ? <CircularProgress /> : (
